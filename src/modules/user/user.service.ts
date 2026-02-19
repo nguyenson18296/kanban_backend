@@ -11,11 +11,11 @@ export class UserService {
   ) {}
 
   findAll(): Promise<User[]> {
-    return this.userRepository.find();
+    return this.userRepository.find({ relations: ['team'] });
   }
 
   findOneById(id: string): Promise<User | null> {
-    return this.userRepository.findOneBy({ id });
+    return this.userRepository.findOne({ where: { id }, relations: ['team'] });
   }
 
   findOneByEmail(email: string): Promise<User | null> {

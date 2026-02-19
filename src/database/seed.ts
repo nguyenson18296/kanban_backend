@@ -1,47 +1,204 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import { DataSource } from 'typeorm';
 import { connectionSource } from './typeorm';
-import { User } from '../modules/user/user.entity';
+import { User, UserRole } from '../modules/user/user.entity';
+import { Team } from '../modules/team/team.entity';
 import * as bcrypt from 'bcryptjs';
 
+const teamsData = [
+  {
+    name: 'Platform',
+    description: 'Core platform & infrastructure',
+    color: '#3B82F6',
+  },
+  {
+    name: 'Web UI',
+    description: 'Frontend & design systems',
+    color: '#10B981',
+  },
+  {
+    name: 'Quality',
+    description: 'QA, testing & automation',
+    color: '#F59E0B',
+  },
+  {
+    name: 'DevOps',
+    description: 'CI/CD, infrastructure & monitoring',
+    color: '#EF4444',
+  },
+];
+
 const users = [
-  { fullName: 'Alice Johnson', email: 'alice.johnson@example.com', role: 'Backend Developer', team: 'Platform' },
-  { fullName: 'Bob Smith', email: 'bob.smith@example.com', role: 'Frontend Developer', team: 'Payments' },
-  { fullName: 'Carol Williams', email: 'carol.williams@example.com', role: 'QA Engineer', team: 'Search' },
-  { fullName: 'David Brown', email: 'david.brown@example.com', role: 'Product Manager', team: 'Infrastructure' },
-  { fullName: 'Eve Davis', email: 'eve.davis@example.com', role: 'UX Designer', team: 'Notifications' },
-  { fullName: 'Frank Miller', email: 'frank.miller@example.com', role: 'DevOps Engineer', team: 'Platform' },
-  { fullName: 'Grace Wilson', email: 'grace.wilson@example.com', role: 'Backend Developer', team: 'Payments' },
-  { fullName: 'Hank Moore', email: 'hank.moore@example.com', role: 'Frontend Developer', team: 'Search' },
-  { fullName: 'Ivy Taylor', email: 'ivy.taylor@example.com', role: 'QA Engineer', team: 'Infrastructure' },
-  { fullName: 'Jack Anderson', email: 'jack.anderson@example.com', role: 'Product Manager', team: 'Notifications' },
-  { fullName: 'Karen Thomas', email: 'karen.thomas@example.com', role: 'UX Designer', team: 'Platform' },
-  { fullName: 'Leo Jackson', email: 'leo.jackson@example.com', role: 'DevOps Engineer', team: 'Payments' },
-  { fullName: 'Mia White', email: 'mia.white@example.com', role: 'Backend Developer', team: 'Search' },
-  { fullName: 'Nick Harris', email: 'nick.harris@example.com', role: 'Frontend Developer', team: 'Infrastructure' },
-  { fullName: 'Olivia Martin', email: 'olivia.martin@example.com', role: 'QA Engineer', team: 'Notifications' },
-  { fullName: 'Paul Garcia', email: 'paul.garcia@example.com', role: 'Product Manager', team: 'Platform' },
-  { fullName: 'Quinn Martinez', email: 'quinn.martinez@example.com', role: 'UX Designer', team: 'Payments' },
-  { fullName: 'Rachel Robinson', email: 'rachel.robinson@example.com', role: 'DevOps Engineer', team: 'Search' },
-  { fullName: 'Sam Clark', email: 'sam.clark@example.com', role: 'Backend Developer', team: 'Infrastructure' },
-  { fullName: 'Tina Lewis', email: 'tina.lewis@example.com', role: 'Frontend Developer', team: 'Notifications' },
+  {
+    full_name: 'Alice Nguyen',
+    email: 'alice@kanban.dev',
+    role: UserRole.TECH_LEAD,
+    team: 'Platform',
+  },
+  {
+    full_name: 'Bob Tran',
+    email: 'bob@kanban.dev',
+    role: UserRole.BACKEND_DEVELOPER,
+    team: 'Platform',
+  },
+  {
+    full_name: 'Carol Le',
+    email: 'carol@kanban.dev',
+    role: UserRole.FRONTEND_DEVELOPER,
+    team: 'Web UI',
+  },
+  {
+    full_name: 'Dave Pham',
+    email: 'dave@kanban.dev',
+    role: UserRole.QA,
+    team: 'Quality',
+  },
+  {
+    full_name: 'Eve Vo',
+    email: 'eve@kanban.dev',
+    role: UserRole.DESIGNER,
+    team: 'Web UI',
+  },
+  {
+    full_name: 'Frank Do',
+    email: 'frank@kanban.dev',
+    role: UserRole.DEVOPS,
+    team: 'DevOps',
+  },
+  {
+    full_name: 'Grace Bui',
+    email: 'grace@kanban.dev',
+    role: UserRole.BACKEND_DEVELOPER,
+    team: 'Platform',
+  },
+  {
+    full_name: 'Hank Ly',
+    email: 'hank@kanban.dev',
+    role: UserRole.FRONTEND_DEVELOPER,
+    team: 'Web UI',
+  },
+  {
+    full_name: 'Ivy Dang',
+    email: 'ivy@kanban.dev',
+    role: UserRole.QA,
+    team: 'Quality',
+  },
+  {
+    full_name: 'Jack Hoang',
+    email: 'jack@kanban.dev',
+    role: UserRole.PRODUCT_MANAGER,
+    team: 'Platform',
+  },
+  {
+    full_name: 'Karen Vu',
+    email: 'karen@kanban.dev',
+    role: UserRole.DESIGNER,
+    team: 'Web UI',
+  },
+  {
+    full_name: 'Leo Ngo',
+    email: 'leo@kanban.dev',
+    role: UserRole.FULLSTACK_DEVELOPER,
+    team: 'Platform',
+  },
+  {
+    full_name: 'Mia Truong',
+    email: 'mia@kanban.dev',
+    role: UserRole.BACKEND_DEVELOPER,
+    team: 'DevOps',
+  },
+  {
+    full_name: 'Nick Duong',
+    email: 'nick@kanban.dev',
+    role: UserRole.FRONTEND_DEVELOPER,
+    team: 'Web UI',
+  },
+  {
+    full_name: 'Olivia Mai',
+    email: 'olivia@kanban.dev',
+    role: UserRole.QA,
+    team: 'Quality',
+  },
+  {
+    full_name: 'Paul Lam',
+    email: 'paul@kanban.dev',
+    role: UserRole.PRODUCT_MANAGER,
+    team: 'Platform',
+  },
+  {
+    full_name: 'Quinn Ta',
+    email: 'quinn@kanban.dev',
+    role: UserRole.TECH_LEAD,
+    team: 'DevOps',
+  },
+  {
+    full_name: 'Rachel Ton',
+    email: 'rachel@kanban.dev',
+    role: UserRole.DEVOPS,
+    team: 'DevOps',
+  },
+  {
+    full_name: 'Sam Cao',
+    email: 'sam@kanban.dev',
+    role: UserRole.FULLSTACK_DEVELOPER,
+    team: 'Web UI',
+  },
+  {
+    full_name: 'Tina Luong',
+    email: 'tina@kanban.dev',
+    role: UserRole.FRONTEND_DEVELOPER,
+    team: 'Web UI',
+  },
 ];
 
 async function seed() {
-  await connectionSource.initialize();
+  // Initialize without auto-sync so we can drop stale tables first
+  const dataSource = new DataSource({
+    ...connectionSource.options,
+    synchronize: false,
+  });
+  await dataSource.initialize();
   console.log('Database connected');
 
+  // Drop and recreate all tables to ensure clean schema
+  const queryRunner = dataSource.createQueryRunner();
+  await queryRunner.query('DROP TABLE IF EXISTS "users" CASCADE');
+  await queryRunner.query('DROP TABLE IF EXISTS "teams" CASCADE');
+  await queryRunner.query(
+    'DROP TYPE IF EXISTS "public"."users_role_enum" CASCADE',
+  );
+  await queryRunner.release();
+  await dataSource.synchronize();
+  console.log('Schema synchronized');
+
+  // Seed teams
+  const teamRepo = dataSource.getRepository(Team);
+  await teamRepo.upsert(teamsData, ['name']);
+  const savedTeams = await teamRepo.find();
+  const teamMap: Record<string, number> = savedTeams.reduce(
+    (acc, t) => {
+      acc[t.name] = t.id;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  console.log(`Seeded ${savedTeams.length} teams`);
+
+  // Seed users
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  const userEntities = users.map((u) => ({
+  const userEntities = users.map(({ team, ...u }) => ({
     ...u,
-    password: hashedPassword,
-    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName)}&background=random`,
+    password_hash: hashedPassword,
+    team_id: teamMap[team],
+    avatar_url: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(u.full_name)}`,
   }));
 
-  const repo = connectionSource.getRepository(User);
-  await repo.upsert(userEntities, ['email']);
-
+  const userRepo = dataSource.getRepository(User);
+  await userRepo.upsert(userEntities, ['email']);
   console.log(`Seeded ${userEntities.length} users`);
-  await connectionSource.destroy();
+
+  await dataSource.destroy();
 }
 
 seed().catch((err) => {
