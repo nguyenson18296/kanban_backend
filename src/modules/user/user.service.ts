@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   HttpStatus,
   Injectable,
   InternalServerErrorException,
@@ -50,6 +51,58 @@ export class UserService {
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to fetch user',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async findOneByEmailWithPassword(email: string): Promise<User | null> {
+    try {
+      return await this.userRepository
+        .createQueryBuilder('user')
+        .addSelect('user.password_hash')
+        .where('user.email = :email', { email })
+        .getOne();
+    } catch (error) {
+      this.logger.error(
+        'Failed to fetch user by email with password',
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to fetch user',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async create(userData: Partial<User>): Promise<User> {
+    try {
+      const existing = await this.userRepository.findOneBy({
+        email: userData.email,
+      });
+      if (existing) {
+        throw new ConflictException({
+          statusCode: HttpStatus.CONFLICT,
+          message: `User with email "${userData.email}" already exists`,
+        });
+      }
+      const user = this.userRepository.create(userData);
+      const saved = await this.userRepository.save(user);
+      delete (saved as any).password_hash;
+      return saved;
+    } catch (error) {
+      if (error instanceof ConflictException) throw error;
+      if ((error as any).code === '23505') {
+        throw new ConflictException({
+          statusCode: HttpStatus.CONFLICT,
+          message: `User with email "${userData.email}" already exists`,
+        });
+      }
+      this.logger.error('Failed to create user', (error as Error).stack);
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to create user',
         error: (error as Error).message,
       });
     }

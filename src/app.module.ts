@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserModule } from './modules/user/user.module';
 import { TeamModule } from './modules/team/team.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { TeamModule } from './modules/team/team.module';
     }),
     UserModule,
     TeamModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
