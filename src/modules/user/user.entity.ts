@@ -50,6 +50,7 @@ export class User {
   @Column({ type: 'int', nullable: true })
   team_id: number;
 
+  @ApiHideProperty()
   @ManyToOne(() => Team, (team) => team.members, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'team_id' })
   team: Team;

@@ -332,7 +332,8 @@ Register a new user account.
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "email": "user@example.com",
     "full_name": "Jane Doe",
-    "role": "backend_developer"
+    "role": "backend_developer",
+    "avatar_url": "https://api.dicebear.com/9.x/initials/svg?seed=JD"
   }
 }
 ```

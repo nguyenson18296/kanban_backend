@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -41,6 +41,7 @@ export class Team {
   @UpdateDateColumn({ type: 'timestamptz' })
   updated_at: Date;
 
+  @ApiHideProperty()
   @OneToMany(() => User, (user) => user.team)
   members: User[];
 }
