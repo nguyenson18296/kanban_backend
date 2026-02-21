@@ -55,6 +55,7 @@ export class AuthService {
         email: user.email,
         full_name: user.full_name,
         role: user.role,
+        avatar_url: user.avatar_url,
       },
     };
   }
@@ -94,6 +95,7 @@ export class AuthService {
         email: user.email,
         full_name: user.full_name,
         role: user.role,
+        avatar_url: user.avatar_url,
       },
     };
   }
@@ -165,6 +167,7 @@ export class AuthService {
         email: user.email,
         full_name: user.full_name,
         role: user.role,
+        avatar_url: user.avatar_url,
       },
     };
   }
