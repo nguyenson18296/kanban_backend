@@ -31,7 +31,11 @@ export class AuthController {
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
-  @ApiResponse({ status: 201, description: 'User registered', type: AuthResponseDto })
+  @ApiResponse({
+    status: 201,
+    description: 'User registered',
+    type: AuthResponseDto,
+  })
   @ApiResponse({ status: 409, description: 'Email already exists' })
   async register(
     @Body() dto: RegisterDto,
@@ -43,7 +47,11 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
-  @ApiResponse({ status: 200, description: 'Login successful', type: AuthResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    type: AuthResponseDto,
+  })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(
     @Body() dto: LoginDto,
@@ -55,14 +63,18 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
-  @ApiResponse({ status: 200, description: 'Token refreshed', type: AuthResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Token refreshed',
+    type: AuthResponseDto,
+  })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
   async refresh(
     @Body() dto: RefreshTokenDto,
     @Req() req: Request,
   ): Promise<AuthResponseDto> {
     // Nest injects AuthService at runtime; type is unresolved for ESLint
-    /* eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
+
     return await this.authService.refresh(
       dto.refresh_token,
       req.ip,
@@ -78,14 +90,14 @@ export class AuthController {
     @Body() dto: RefreshTokenDto,
   ): Promise<{ message: string; revoked: boolean }> {
     // Nest injects AuthService at runtime; type is unresolved for ESLint
-    /* eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment */
+
     const revoked = await this.authService.logout(dto.refresh_token);
 
     return {
       message: revoked
         ? 'Logged out successfully'
         : 'Token not found or already revoked',
-      /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment */
+
       revoked,
     };
   }
@@ -101,9 +113,9 @@ export class AuthController {
     @CurrentUser('id') userId: string,
   ): Promise<{ message: string; revoked_count: number }> {
     // Nest injects AuthService at runtime; type is unresolved for ESLint
-    /* eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment */
+
     const count = await this.authService.logoutAll(userId);
-    /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment */
+
     return { message: 'All sessions revoked', revoked_count: count };
   }
 

@@ -1,9 +1,29 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { DataSource } from 'typeorm';
 import { connectionSource } from './typeorm';
 import { User, UserRole } from '../modules/user/user.entity';
 import { Team } from '../modules/team/team.entity';
+import { KanbanColumn } from '../modules/kanban-column/kanban-column.entity';
+import { Label } from '../modules/label/label.entity';
 import * as bcrypt from 'bcryptjs';
+
+const kanbanColumnsData = [
+  { name: 'Backlog', position: 0, color: '#6B7280' },
+  { name: 'Todo', position: 1, color: '#3B82F6' },
+  { name: 'In Progress', position: 2, color: '#F59E0B' },
+  { name: 'In Review', position: 3, color: '#8B5CF6' },
+  { name: 'Done', position: 4, color: '#10B981' },
+];
+
+const labelsData = [
+  { name: 'Bug', color: '#EF4444' },
+  { name: 'Feature', color: '#3B82F6' },
+  { name: 'Improvement', color: '#10B981' },
+  { name: 'Hotfix', color: '#F97316' },
+  { name: 'Documentation', color: '#6366F1' },
+  { name: 'Design', color: '#EC4899' },
+  { name: 'DevOps', color: '#14B8A6' },
+  { name: 'Research', color: '#8B5CF6' },
+];
 
 const teamsData = [
   {
@@ -162,14 +182,36 @@ async function seed() {
 
   // Drop and recreate all tables to ensure clean schema
   const queryRunner = dataSource.createQueryRunner();
+  await queryRunner.query('DROP TABLE IF EXISTS "task_labels" CASCADE');
+  await queryRunner.query('DROP TABLE IF EXISTS "task_assignees" CASCADE');
+  await queryRunner.query('DROP TABLE IF EXISTS "tasks" CASCADE');
+  await queryRunner.query('DROP TABLE IF EXISTS "labels" CASCADE');
+  await queryRunner.query('DROP TABLE IF EXISTS "kanban_columns" CASCADE');
+  await queryRunner.query('DROP TABLE IF EXISTS "refresh_tokens" CASCADE');
   await queryRunner.query('DROP TABLE IF EXISTS "users" CASCADE');
   await queryRunner.query('DROP TABLE IF EXISTS "teams" CASCADE');
   await queryRunner.query(
     'DROP TYPE IF EXISTS "public"."users_role_enum" CASCADE',
   );
+  await queryRunner.query(
+    'DROP TYPE IF EXISTS "public"."tasks_status_enum" CASCADE',
+  );
+  await queryRunner.query(
+    'DROP TYPE IF EXISTS "public"."tasks_priority_enum" CASCADE',
+  );
   await queryRunner.release();
   await dataSource.synchronize();
   console.log('Schema synchronized');
+
+  // Seed kanban columns
+  const columnRepo = dataSource.getRepository(KanbanColumn);
+  await columnRepo.upsert(kanbanColumnsData, ['name']);
+  console.log(`Seeded ${kanbanColumnsData.length} kanban columns`);
+
+  // Seed labels
+  const labelRepo = dataSource.getRepository(Label);
+  await labelRepo.upsert(labelsData, ['name']);
+  console.log(`Seeded ${labelsData.length} labels`);
 
   // Seed teams
   const teamRepo = dataSource.getRepository(Team);
