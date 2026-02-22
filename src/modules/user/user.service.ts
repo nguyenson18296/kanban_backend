@@ -93,7 +93,7 @@ export class UserService {
       return saved;
     } catch (error) {
       if (error instanceof ConflictException) throw error;
-      if ((error as any).code === '23505') {
+      if (error.code === '23505') {
         throw new ConflictException({
           statusCode: HttpStatus.CONFLICT,
           message: `User with email "${userData.email}" already exists`,
