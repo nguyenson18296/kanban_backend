@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Task } from './task.entity';
 import { User } from '../user/user.entity';
 import { Label } from '../label/label.entity';
@@ -27,7 +27,18 @@ export class TaskService {
     private readonly labelRepository: Repository<Label>,
     @InjectRepository(KanbanColumn)
     private readonly columnRepository: Repository<KanbanColumn>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private async ensureTaskExists(id: string): Promise<void> {
+    const exists = await this.taskRepository.existsBy({ id });
+    if (!exists) {
+      throw new NotFoundException({
+        statusCode: HttpStatus.NOT_FOUND,
+        message: `Task with id "${id}" not found`,
+      });
+    }
+  }
 
   async create(dto: CreateTaskDto): Promise<Task> {
     try {
@@ -218,6 +229,47 @@ export class TaskService {
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to remove labels',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async reorder(id: string, position: number): Promise<Task> {
+    try {
+      await this.ensureTaskExists(id);
+      // Defined in sql/kanban_tasks.sql (section 8c)
+      await this.dataSource.query('SELECT fn_reorder_task($1::uuid, $2::int)', [
+        id,
+        position,
+      ]);
+      return this.findOneById(id);
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error('Failed to reorder task', (error as Error).stack);
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to reorder task',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async move(id: string, columnId: number, position: number): Promise<Task> {
+    try {
+      await this.ensureTaskExists(id);
+      await this.resolveColumn(columnId);
+      // Defined in sql/kanban_tasks.sql (section 8b)
+      await this.dataSource.query(
+        'SELECT fn_move_task($1::uuid, $2::int, $3::int)',
+        [id, columnId, position],
+      );
+      return this.findOneById(id);
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error('Failed to move task', (error as Error).stack);
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to move task',
         error: (error as Error).message,
       });
     }
