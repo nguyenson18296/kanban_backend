@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Task } from './task.entity';
 import { User } from '../user/user.entity';
 import { Label } from '../label/label.entity';
@@ -27,6 +27,7 @@ export class TaskService {
     private readonly labelRepository: Repository<Label>,
     @InjectRepository(KanbanColumn)
     private readonly columnRepository: Repository<KanbanColumn>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(dto: CreateTaskDto): Promise<Task> {
@@ -218,6 +219,45 @@ export class TaskService {
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to remove labels',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async reorder(id: string, position: number): Promise<Task> {
+    try {
+      await this.findOneById(id);
+      await this.dataSource.query('SELECT fn_reorder_task($1::uuid, $2::int)', [
+        id,
+        position,
+      ]);
+      return this.findOneById(id);
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error('Failed to reorder task', (error as Error).stack);
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to reorder task',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async move(id: string, columnId: number, position: number): Promise<Task> {
+    try {
+      await this.findOneById(id);
+      await this.resolveColumn(columnId);
+      await this.dataSource.query(
+        'SELECT fn_move_task($1::uuid, $2::int, $3::int)',
+        [id, columnId, position],
+      );
+      return this.findOneById(id);
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error('Failed to move task', (error as Error).stack);
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to move task',
         error: (error as Error).message,
       });
     }

@@ -15,6 +15,8 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { ManageAssigneesDto } from './dto/manage-assignees.dto';
 import { ManageLabelsDto } from './dto/manage-labels.dto';
+import { ReorderTaskDto } from './dto/reorder-task.dto';
+import { MoveTaskDto } from './dto/move-task.dto';
 
 @ApiTags('Tasks')
 @Controller('tasks')
@@ -51,6 +53,24 @@ export class TaskController {
   @ApiResponse({ status: 404, description: 'Task not found' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTaskDto) {
     return this.taskService.update(id, dto);
+  }
+
+  @Patch(':id/reorder')
+  @ApiOperation({ summary: 'Reorder a task within the same column' })
+  @ApiParam({ name: 'id', description: 'Task UUID' })
+  @ApiResponse({ status: 200, description: 'Task reordered', type: Task })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  reorder(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReorderTaskDto) {
+    return this.taskService.reorder(id, dto.position);
+  }
+
+  @Patch(':id/move')
+  @ApiOperation({ summary: 'Move a task to a different column' })
+  @ApiParam({ name: 'id', description: 'Task UUID' })
+  @ApiResponse({ status: 200, description: 'Task moved', type: Task })
+  @ApiResponse({ status: 404, description: 'Task or column not found' })
+  move(@Param('id', ParseUUIDPipe) id: string, @Body() dto: MoveTaskDto) {
+    return this.taskService.move(id, dto.column_id, dto.position);
   }
 
   @Delete(':id')
