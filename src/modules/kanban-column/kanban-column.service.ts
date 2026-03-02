@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Project } from '../project/project.entity';
 import { KanbanColumn } from './kanban-column.entity';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { UpdateKanbanColumnDto } from './dto/update-kanban-column.dto';
@@ -19,13 +20,26 @@ export class KanbanColumnService {
   constructor(
     @InjectRepository(KanbanColumn)
     private readonly columnRepository: Repository<KanbanColumn>,
+    @InjectRepository(Project)
+    private readonly projectRepository: Repository<Project>,
   ) {}
 
   async create(dto: CreateKanbanColumnDto): Promise<KanbanColumn> {
     try {
+      const project = await this.projectRepository.findOneBy({
+        id: dto.project_id,
+      });
+      if (!project) {
+        throw new NotFoundException({
+          statusCode: HttpStatus.NOT_FOUND,
+          message: `Project with id "${dto.project_id}" not found`,
+        });
+      }
+
       const column = this.columnRepository.create(dto);
       return await this.columnRepository.save(column);
     } catch (error) {
+      if (error instanceof NotFoundException) throw error;
       if (error.code === '23505') {
         throw new ConflictException({
           statusCode: HttpStatus.CONFLICT,
@@ -81,6 +95,18 @@ export class KanbanColumnService {
 
   async update(id: number, dto: UpdateKanbanColumnDto): Promise<KanbanColumn> {
     try {
+      if (dto.project_id) {
+        const project = await this.projectRepository.findOneBy({
+          id: dto.project_id,
+        });
+        if (!project) {
+          throw new NotFoundException({
+            statusCode: HttpStatus.NOT_FOUND,
+            message: `Project with id "${dto.project_id}" not found`,
+          });
+        }
+      }
+
       const column = await this.findOneById(id);
       Object.assign(column, dto);
       return await this.columnRepository.save(column);

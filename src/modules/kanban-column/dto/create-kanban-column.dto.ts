@@ -16,6 +16,14 @@ export class CreateKanbanColumnDto {
   @MaxLength(100)
   name: string;
 
+  @ApiProperty({ example: 'aB3kM9xZ' })
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^[A-Za-z0-9]{8}$/, {
+    message: 'project_id must be exactly 8 alphanumeric characters',
+  })
+  project_id: string;
+
   @ApiPropertyOptional({ example: 2 })
   @IsOptional()
   @IsInt()

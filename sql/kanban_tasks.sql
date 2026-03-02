@@ -39,6 +39,7 @@ CREATE TABLE kanban_columns (
     position        INT NOT NULL DEFAULT 0,                -- Ordering: 0, 1, 2, 3...
     color           VARCHAR(20),                           -- Hex color for UI
     is_archived     BOOLEAN NOT NULL DEFAULT FALSE,
+    project_id      VARCHAR(8) NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -47,6 +48,7 @@ CREATE TABLE kanban_columns (
 );
 
 CREATE INDEX idx_kanban_columns_position ON kanban_columns (position) WHERE is_archived = FALSE;
+CREATE INDEX idx_kanban_columns_project_id ON kanban_columns (project_id);
 
 CREATE TRIGGER trg_kanban_columns_updated_at
     BEFORE UPDATE ON kanban_columns
@@ -296,10 +298,10 @@ $$ LANGUAGE plpgsql;
 -- ============================================
 
 -- -------------------------------------------------
--- 9a. CREATE a column
+-- 9a. CREATE a column (project_id is required)
 -- -------------------------------------------------
--- INSERT INTO kanban_columns (name, position, color)
--- VALUES ('QA Testing', 5, '#F43F5E');
+-- INSERT INTO kanban_columns (name, position, color, project_id)
+-- VALUES ('QA Testing', 5, '#F43F5E', 'aB3kM9xZ');
 
 
 -- -------------------------------------------------
@@ -356,13 +358,14 @@ $$ LANGUAGE plpgsql;
 
 
 -- -------------------------------------------------
--- 9f. GET /api/board — Composite board endpoint
+-- 9f. GET /api/board/:projectId — Composite board endpoint
 --     Returns JSON: { columns: [{ id, name, position, color, task_count, tasks }] }
 --     Each task includes nested assignees and labels arrays.
 --     Supports: per-column pagination, priority/search/assignee/label filters.
+--     Scoped to a specific project via project_id.
 -- -------------------------------------------------
 
--- Base board query (no filters, 50 tasks per column)
+-- Base board query scoped to project (no filters, 50 tasks per column)
 SELECT json_build_object('columns',
     (SELECT COALESCE(json_agg(col_data ORDER BY col_data.position), '[]'::json)
      FROM (
@@ -390,11 +393,12 @@ SELECT json_build_object('columns',
                   FROM tasks t
                   WHERE t.column_id = kc.id
                   ORDER BY t.position
-                  LIMIT 50                                     tasksPerColumn
+                  LIMIT 50                                     -- tasksPerColumn
               ) task_row
              ) AS tasks
          FROM kanban_columns kc
          WHERE kc.is_archived = FALSE
+           AND kc.project_id = 'aB3kM9xZ'                     -- scoped to project
          ORDER BY kc.position
      ) col_data
     )
@@ -403,7 +407,7 @@ SELECT json_build_object('columns',
 
 -- -------------------------------------------------
 -- 9g. Board with priority filter
---     GET /api/board?priority=high
+--     GET /api/board/aB3kM9xZ?priority=high
 -- -------------------------------------------------
 -- Same as 9f but add to inner tasks WHERE clause:
 --   AND t.priority = 'high'
@@ -413,7 +417,7 @@ SELECT json_build_object('columns',
 
 -- -------------------------------------------------
 -- 9h. Board with search filter
---     GET /api/board?search=login
+--     GET /api/board/aB3kM9xZ?search=login
 -- -------------------------------------------------
 -- Same as 9f but add to inner tasks WHERE clause:
 --   AND t.title ILIKE '%login%'
@@ -422,7 +426,7 @@ SELECT json_build_object('columns',
 
 -- -------------------------------------------------
 -- 9i. Board filtered by assignee (subquery approach)
---     GET /api/board?assigneeId=<uuid>
+--     GET /api/board/aB3kM9xZ?assigneeId=<uuid>
 --     Uses subquery so the LEFT JOIN still returns ALL assignees of matching tasks.
 -- -------------------------------------------------
 -- Same as 9f but add to inner tasks WHERE clause:
@@ -431,7 +435,7 @@ SELECT json_build_object('columns',
 
 -- -------------------------------------------------
 -- 9j. Board filtered by label (subquery approach)
---     GET /api/board?labelId=<uuid>
+--     GET /api/board/aB3kM9xZ?labelId=<uuid>
 --     Uses subquery so the LEFT JOIN still returns ALL labels of matching tasks.
 -- -------------------------------------------------
 -- Same as 9f but add to inner tasks WHERE clause:
@@ -440,6 +444,6 @@ SELECT json_build_object('columns',
 
 -- -------------------------------------------------
 -- 9k. Combined filters (AND logic)
---     GET /api/board?priority=high&assigneeId=<uuid>&tasksPerColumn=10
+--     GET /api/board/aB3kM9xZ?priority=high&assigneeId=<uuid>&tasksPerColumn=10
 -- -------------------------------------------------
 -- Combine the WHERE clauses from 9g–9j and adjust LIMIT to tasksPerColumn value.

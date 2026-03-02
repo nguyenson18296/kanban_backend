@@ -7,8 +7,12 @@ import {
   UpdateDateColumn,
   Index,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+
 import { Task } from '../task/task.entity';
+import { Project } from '../project/project.entity';
 
 @Entity('kanban_columns')
 export class KanbanColumn {
@@ -40,6 +44,18 @@ export class KanbanColumn {
   @ApiProperty({ example: '2025-01-01T00:00:00.000Z' })
   @UpdateDateColumn({ type: 'timestamptz' })
   updated_at: Date;
+
+  @ApiProperty({ example: 'aB3kM9xZ' })
+  @Column({ type: 'varchar', length: 8 })
+  project_id: string;
+
+  @ApiHideProperty()
+  @ManyToOne(() => Project, (project) => project.columns, {
+    nullable: false,
+    onDelete: 'RESTRICT',
+  })
+  @JoinColumn({ name: 'project_id' })
+  project: Project;
 
   @ApiHideProperty()
   @OneToMany(() => Task, (task) => task.column)

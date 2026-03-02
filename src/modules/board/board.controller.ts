@@ -1,5 +1,6 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ParseProjectIdPipe } from '../../common/pipes/parse-project-id.pipe';
 import { BoardService } from './board.service';
 import { BoardQueryDto } from './dto/board-query.dto';
 import { BoardResponseDto } from './dto/board-response.dto';
@@ -9,18 +10,23 @@ import { BoardResponseDto } from './dto/board-response.dto';
 export class BoardController {
   constructor(private readonly boardService: BoardService) {}
 
-  @Get()
+  @Get(':projectId')
   @ApiOperation({
-    summary: 'Get board with columns and tasks',
+    summary: 'Get board with columns and tasks for a project',
     description:
-      'Returns all active columns with their tasks, assignees, and labels. Supports filtering and per-column pagination.',
+      'Returns all active columns with their tasks, assignees, and labels for the given project. Supports filtering and per-column pagination.',
   })
+  @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiResponse({
     status: 200,
     description: 'Board data',
     type: BoardResponseDto,
   })
-  getBoard(@Query() query: BoardQueryDto): Promise<BoardResponseDto> {
-    return this.boardService.getBoard(query);
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  getBoard(
+    @Param('projectId', ParseProjectIdPipe) projectId: string,
+    @Query() query: BoardQueryDto,
+  ): Promise<BoardResponseDto> {
+    return this.boardService.getBoard(projectId, query);
   }
 }

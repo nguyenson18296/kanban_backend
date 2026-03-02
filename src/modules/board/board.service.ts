@@ -3,10 +3,12 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KanbanColumn } from '../kanban-column/kanban-column.entity';
+import { Project } from '../project/project.entity';
 import { Task } from '../task/task.entity';
 import { BoardQueryDto } from './dto/board-query.dto';
 import { BoardResponseDto } from './dto/board-response.dto';
@@ -20,12 +22,25 @@ export class BoardService {
     private readonly columnRepository: Repository<KanbanColumn>,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
+    @InjectRepository(Project)
+    private readonly projectRepository: Repository<Project>,
   ) {}
 
-  async getBoard(query: BoardQueryDto): Promise<BoardResponseDto> {
+  async getBoard(
+    projectId: string,
+    query: BoardQueryDto,
+  ): Promise<BoardResponseDto> {
     try {
+      const project = await this.projectRepository.findOneBy({ id: projectId });
+      if (!project) {
+        throw new NotFoundException({
+          statusCode: HttpStatus.NOT_FOUND,
+          message: `Project with id "${projectId}" not found`,
+        });
+      }
+
       const columns = await this.columnRepository.find({
-        where: { is_archived: false },
+        where: { is_archived: false, project_id: projectId },
         order: { position: 'ASC' },
       });
 
@@ -151,6 +166,7 @@ export class BoardService {
         })),
       };
     } catch (error) {
+      if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to fetch board', (error as Error).stack);
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
