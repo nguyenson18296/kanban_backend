@@ -20,7 +20,7 @@ Prior to this change the backend only had Users, Teams, and Auth modules. There 
 | No representation of work items | `tasks` table with status, priority, position ordering |
 | No way to categorize tasks | `labels` table + `task_labels` many-to-many join |
 | No way to assign people to tasks | `task_assignees` many-to-many join |
-| Frontend needs entire board in one request | `GET /api/board` composite endpoint |
+| Frontend needs entire board in one request | `GET /api/board/:projectId` composite endpoint |
 | Frontend needs server-side filtering | Query params for priority, search, assignee, label |
 | Large boards need pagination | Per-column `tasksPerColumn` limit pushed to database via `ROW_NUMBER()` |
 | Ticket ID generation race condition | Database trigger (`fn_set_ticket_id`) sets `ticket_id` atomically on insert |
@@ -352,7 +352,13 @@ Both `user_ids` and `label_ids` arrays must be non-empty (`@ArrayNotEmpty()`).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/board` | Get full board state |
+| `GET` | `/api/board/:projectId` | Get board state for a project |
+
+**Path Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `projectId` | `string` | Alphanumeric project ID (validated via `ParseProjectIdPipe`) |
 
 **Query Parameters:**
 
@@ -368,7 +374,7 @@ All filters combine with AND logic.
 
 **Example Request:**
 ```
-GET /api/board?tasksPerColumn=10&priority=high&search=login
+GET /api/board/aB3kM9xZ?tasksPerColumn=10&priority=high&search=login
 ```
 
 **Response Shape:**
@@ -415,7 +421,8 @@ Key notes:
 - `task_count` reflects the **total** number of matching tasks in the column (not limited by `tasksPerColumn`)
 - `tasks` array is capped at `tasksPerColumn`, sorted by `position ASC`
 - Tasks intentionally **exclude `description`** (fetched separately via `GET /api/tasks/:id`)
-- Columns are sorted by `position ASC`; only non-archived columns are returned
+- Columns are sorted by `position ASC`; only non-archived columns for the given project are returned
+- Returns `404 Not Found` if the `projectId` does not match an existing project
 - When filtering by assignee or label, all assignees/labels are still returned on each matching task (not just the filtered one)
 
 ---
@@ -455,7 +462,9 @@ This commit does not add authentication guards to the new endpoints. The existin
 
 | Scenario | Behavior |
 |----------|----------|
-| No columns exist | Board returns `{ "columns": [] }` |
+| Invalid project ID format | `400 Bad Request`: "Project ID must contain only alphanumeric characters" |
+| Non-existent project ID | `404 Not Found`: "Project with id X not found" |
+| No columns exist for project | Board returns `{ "columns": [] }` |
 | Column has no tasks | Column appears with `task_count: 0`, `tasks: []` |
 | All tasks filtered out | Columns still appear, each with `task_count: 0` |
 | Delete column with tasks | `409 Conflict`: "Cannot delete column with existing tasks" |

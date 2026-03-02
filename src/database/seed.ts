@@ -2,9 +2,14 @@ import { DataSource } from 'typeorm';
 import { connectionSource } from './typeorm';
 import { User, UserRole } from '../modules/user/user.entity';
 import { Team } from '../modules/team/team.entity';
+import { Project } from '../modules/project/project.entity';
 import { KanbanColumn } from '../modules/kanban-column/kanban-column.entity';
 import { Label } from '../modules/label/label.entity';
 import * as bcrypt from 'bcryptjs';
+
+const projectsData = [
+  { name: 'Default Project', description: 'Default kanban board project' },
+];
 
 const kanbanColumnsData = [
   { name: 'Backlog', position: 0, color: '#6B7280' },
@@ -187,6 +192,7 @@ async function seed() {
   await queryRunner.query('DROP TABLE IF EXISTS "tasks" CASCADE');
   await queryRunner.query('DROP TABLE IF EXISTS "labels" CASCADE');
   await queryRunner.query('DROP TABLE IF EXISTS "kanban_columns" CASCADE');
+  await queryRunner.query('DROP TABLE IF EXISTS "projects" CASCADE');
   await queryRunner.query('DROP TABLE IF EXISTS "refresh_tokens" CASCADE');
   await queryRunner.query('DROP TABLE IF EXISTS "users" CASCADE');
   await queryRunner.query('DROP TABLE IF EXISTS "teams" CASCADE');
@@ -203,9 +209,23 @@ async function seed() {
   await dataSource.synchronize();
   console.log('Schema synchronized');
 
-  // Seed kanban columns
+  // Seed projects
+  const projectRepo = dataSource.getRepository(Project);
+  await projectRepo.upsert(projectsData, ['name']);
+  const defaultProject = await projectRepo.findOneBy({
+    name: 'Default Project',
+  });
+  console.log(
+    `Seeded ${projectsData.length} project(s) (id: ${defaultProject.id})`,
+  );
+
+  // Seed kanban columns (assigned to default project)
   const columnRepo = dataSource.getRepository(KanbanColumn);
-  await columnRepo.upsert(kanbanColumnsData, ['name']);
+  const columnsWithProject = kanbanColumnsData.map((col) => ({
+    ...col,
+    project_id: defaultProject.id,
+  }));
+  await columnRepo.upsert(columnsWithProject, ['name']);
   console.log(`Seeded ${kanbanColumnsData.length} kanban columns`);
 
   // Seed labels

@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { UserModule } from './modules/user/user.module';
 import { TeamModule } from './modules/team/team.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ProjectModule } from './modules/project/project.module';
 import { KanbanColumnModule } from './modules/kanban-column/kanban-column.module';
 import { LabelModule } from './modules/label/label.module';
 import { TaskModule } from './modules/task/task.module';
@@ -36,6 +37,7 @@ import { BoardModule } from './modules/board/board.module';
     UserModule,
     TeamModule,
     AuthModule,
+    ProjectModule,
     KanbanColumnModule,
     LabelModule,
     TaskModule,
