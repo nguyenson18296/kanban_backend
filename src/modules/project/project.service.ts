@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { Project } from './project.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -23,10 +23,50 @@ export class ProjectService {
 
   private static readonly MAX_ID_RETRIES = 3;
 
+  private generateBaseTag(name: string): string {
+    const cleaned = name.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+    const words = cleaned.split(/\s+/).filter(Boolean);
+
+    if (words.length > 1) {
+      return words
+        .slice(0, 5)
+        .map((w) => w[0])
+        .join('')
+        .toUpperCase();
+    }
+
+    const single = words[0] ?? '';
+    const tag = single.slice(0, 3).toUpperCase();
+    return tag.length >= 2 ? tag : tag.padEnd(2, 'X');
+  }
+
+  private async resolveUniqueTag(baseTag: string): Promise<string> {
+    const existing = await this.projectRepository.find({
+      where: { tag: Like(`${baseTag}%`) },
+      select: ['tag'],
+    });
+    const takenTags = new Set(existing.map((p) => p.tag));
+
+    if (!takenTags.has(baseTag)) return baseTag;
+
+    for (let i = 1; i <= 99; i++) {
+      const candidate = `${baseTag}${i}`;
+      if (!takenTags.has(candidate)) return candidate;
+    }
+
+    throw new InternalServerErrorException({
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: `Unable to generate unique tag for "${baseTag}"`,
+    });
+  }
+
   async create(dto: CreateProjectDto): Promise<Project> {
+    const baseTag = this.generateBaseTag(dto.name);
+    let tag = await this.resolveUniqueTag(baseTag);
+
     for (let attempt = 0; attempt <= ProjectService.MAX_ID_RETRIES; attempt++) {
       try {
-        const project = this.projectRepository.create(dto);
+        const project = this.projectRepository.create({ ...dto, tag });
         return await this.projectRepository.save(project);
       } catch (error) {
         if (error.code === '23505') {
@@ -34,20 +74,32 @@ export class ProjectService {
             error.constraint?.includes('pkey') ||
             error.constraint?.startsWith('PK_');
 
-          if (isPkCollision && attempt < ProjectService.MAX_ID_RETRIES) {
-            this.logger.warn(
-              `Project ID collision on attempt ${attempt + 1}, retrying`,
-            );
+          const isTagCollision = error.constraint?.includes('tag');
+
+          if (
+            (isPkCollision || isTagCollision) &&
+            attempt < ProjectService.MAX_ID_RETRIES
+          ) {
+            if (isTagCollision) {
+              this.logger.warn(
+                `Tag collision on attempt ${attempt + 1}, retrying`,
+              );
+              tag = await this.resolveUniqueTag(baseTag);
+            } else {
+              this.logger.warn(
+                `Project ID collision on attempt ${attempt + 1}, retrying`,
+              );
+            }
             continue;
           }
 
-          if (isPkCollision) {
+          if (isPkCollision || isTagCollision) {
             this.logger.error(
-              'Project ID collision persisted after max retries',
+              `${isPkCollision ? 'Project ID' : 'Tag'} collision persisted after max retries`,
             );
             throw new InternalServerErrorException({
               statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-              message: 'Failed to generate unique project ID',
+              message: `Failed to generate unique ${isPkCollision ? 'project ID' : 'tag'}`,
             });
           }
 

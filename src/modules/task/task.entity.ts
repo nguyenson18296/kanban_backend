@@ -5,7 +5,6 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  Generated,
   Index,
   ManyToOne,
   ManyToMany,
@@ -73,8 +72,7 @@ export class Task {
   ticket_id: string;
 
   @ApiHideProperty()
-  @Generated('increment')
-  @Column({ type: 'int', unique: true })
+  @Column({ type: 'int', nullable: true })
   ticket_number: number;
 
   @ApiProperty({ example: 1 })
@@ -97,15 +95,12 @@ export class Task {
   @JoinColumn({ name: 'team_id' })
   team: Team;
 
-  @ApiProperty({
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-    nullable: true,
-  })
+  @ApiHideProperty()
   @Index('idx_tasks_created_by')
   @Column({ type: 'uuid', nullable: true })
   created_by: string;
 
-  @ApiHideProperty()
+  @ApiProperty({ type: () => User, nullable: true })
   @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'created_by' })
   creator: User;
@@ -135,4 +130,10 @@ export class Task {
   @ApiProperty({ example: '2025-01-01T00:00:00.000Z' })
   @UpdateDateColumn({ type: 'timestamptz' })
   updated_at: Date;
+
+  toJSON() {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { created_by, ...rest } = this;
+    return rest;
+  }
 }

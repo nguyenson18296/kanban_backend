@@ -73,7 +73,7 @@ export class TaskService {
   async findAll(): Promise<Task[]> {
     try {
       return await this.taskRepository.find({
-        relations: ['assignees', 'labels'],
+        relations: ['assignees', 'labels', 'creator'],
       });
     } catch (error) {
       this.logger.error('Failed to fetch tasks', (error as Error).stack);
@@ -85,11 +85,38 @@ export class TaskService {
     }
   }
 
+  async findByTicketId(ticketId: string): Promise<Task> {
+    try {
+      const task = await this.taskRepository.findOne({
+        where: { ticket_id: ticketId },
+        relations: ['assignees', 'labels', 'creator'],
+      });
+      if (!task) {
+        throw new NotFoundException({
+          statusCode: HttpStatus.NOT_FOUND,
+          message: `Task with ticket_id "${ticketId}" not found`,
+        });
+      }
+      return task;
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error(
+        'Failed to fetch task by ticket_id',
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to fetch task by ticket_id',
+        error: (error as Error).message,
+      });
+    }
+  }
+
   async findOneById(id: string): Promise<Task> {
     try {
       const task = await this.taskRepository.findOne({
         where: { id },
-        relations: ['assignees', 'labels'],
+        relations: ['assignees', 'labels', 'creator'],
       });
       if (!task) {
         throw new NotFoundException({
