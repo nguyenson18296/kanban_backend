@@ -48,6 +48,14 @@ export class Project {
   @Column({ type: 'varchar', length: 100, unique: true })
   name: string;
 
+  @ApiProperty({ example: 'KAN' })
+  @Column({ type: 'varchar', length: 10, unique: true })
+  tag: string;
+
+  @ApiHideProperty()
+  @Column({ type: 'int', default: 0 })
+  ticket_counter: number;
+
   @ApiPropertyOptional({ example: 'A project for tracking tasks' })
   @Column({ type: 'text', nullable: true })
   description: string;

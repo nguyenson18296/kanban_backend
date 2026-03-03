@@ -36,6 +36,8 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE projects (
     id              VARCHAR(8) PRIMARY KEY DEFAULT fn_generate_project_id(),
     name            VARCHAR(100) NOT NULL,
+    tag             VARCHAR(10),                           -- Nullable for backfill; service guarantees non-null on create
+    ticket_counter  INT NOT NULL DEFAULT 0,
     description     TEXT,
     team_id         INT REFERENCES teams(id) ON DELETE SET NULL,
     created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -43,7 +45,9 @@ CREATE TABLE projects (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT uq_projects_name UNIQUE (name),
-    CONSTRAINT chk_projects_id CHECK (id ~ '^[A-Za-z0-9]+$')
+    CONSTRAINT uq_projects_tag UNIQUE (tag),
+    CONSTRAINT chk_projects_id CHECK (id ~ '^[A-Za-z0-9]+$'),
+    CONSTRAINT chk_projects_tag CHECK (tag ~ '^[A-Z0-9]+$')
 );
 
 
@@ -51,6 +55,7 @@ CREATE TABLE projects (
 -- 3. INDEXES
 -- ============================================
 
+CREATE INDEX idx_projects_tag ON projects (tag);
 CREATE INDEX idx_projects_team_id ON projects (team_id);
 CREATE INDEX idx_projects_created_by ON projects (created_by);
 

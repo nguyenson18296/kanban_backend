@@ -8,7 +8,11 @@ import { Label } from '../modules/label/label.entity';
 import * as bcrypt from 'bcryptjs';
 
 const projectsData = [
-  { name: 'Default Project', description: 'Default kanban board project' },
+  {
+    name: 'Default Project',
+    description: 'Default kanban board project',
+    tag: 'DP',
+  },
 ];
 
 const kanbanColumnsData = [

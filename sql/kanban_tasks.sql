@@ -88,8 +88,8 @@ CREATE TABLE tasks (
     status          task_status NOT NULL DEFAULT 'open',
     priority        task_priority NOT NULL DEFAULT 'no_priority',
     position        INT NOT NULL DEFAULT 0,                -- Ordering within a column
-    ticket_number   SERIAL NOT NULL,                       -- Auto-increment for ticket_id generation
-    ticket_id       VARCHAR(20) UNIQUE,                    -- e.g. 'KAN-1', 'KAN-2' (set after insert)
+    ticket_number   INT,                                    -- Per-project sequential number (set by trigger)
+    ticket_id       VARCHAR(20) UNIQUE,                    -- e.g. 'KAN-1', 'WEB-2' (set by trigger)
     column_id       INT NOT NULL REFERENCES kanban_columns(id) ON DELETE RESTRICT,
     team_id         INT REFERENCES teams(id) ON DELETE SET NULL,
     created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -105,12 +105,38 @@ CREATE INDEX idx_tasks_status ON tasks (status);
 CREATE INDEX idx_tasks_priority ON tasks (priority);
 CREATE INDEX idx_tasks_team_id ON tasks (team_id);
 CREATE INDEX idx_tasks_created_by ON tasks (created_by);
-CREATE UNIQUE INDEX idx_tasks_ticket_number ON tasks (ticket_number);
-
 CREATE OR REPLACE FUNCTION fn_set_ticket_id()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_project_id VARCHAR(8);
+    v_tag        VARCHAR(10);
+    v_next_num   INT;
 BEGIN
-    NEW.ticket_id := 'KAN-' || NEW.ticket_number;
+    -- Look up project through the column
+    SELECT kc.project_id INTO v_project_id
+    FROM kanban_columns kc
+    WHERE kc.id = NEW.column_id;
+
+    IF v_project_id IS NULL THEN
+        RAISE EXCEPTION 'Column % has no project', NEW.column_id;
+    END IF;
+
+    -- Atomically increment counter (row-level lock prevents races)
+    UPDATE projects
+    SET ticket_counter = ticket_counter + 1
+    WHERE id = v_project_id
+    RETURNING ticket_counter, tag INTO v_next_num, v_tag;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Project % not found when generating ticket ID', v_project_id;
+    END IF;
+
+    IF v_tag IS NULL THEN
+        RAISE EXCEPTION 'Project % has no tag assigned', v_project_id;
+    END IF;
+
+    NEW.ticket_number := v_next_num;
+    NEW.ticket_id := v_tag || '-' || v_next_num;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

@@ -37,6 +37,15 @@ export class TaskController {
     return this.taskService.findAll();
   }
 
+  @Get('by-ticket/:ticketId')
+  @ApiOperation({ summary: 'Get a task by ticket ID (e.g. KAN-1)' })
+  @ApiParam({ name: 'ticketId', description: 'Ticket ID (e.g. KAN-1, WEB-3)' })
+  @ApiResponse({ status: 200, description: 'Task found', type: Task })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  findByTicketId(@Param('ticketId') ticketId: string) {
+    return this.taskService.findByTicketId(ticketId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a task by ID' })
   @ApiParam({ name: 'id', description: 'Task UUID' })
