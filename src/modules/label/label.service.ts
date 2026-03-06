@@ -55,7 +55,7 @@ export class LabelService {
     }
   }
 
-  async findOneById(id: string): Promise<Label> {
+  async findOneById(id: number): Promise<Label> {
     try {
       const label = await this.labelRepository.findOneBy({ id });
       if (!label) {
@@ -76,7 +76,7 @@ export class LabelService {
     }
   }
 
-  async update(id: string, dto: UpdateLabelDto): Promise<Label> {
+  async update(id: number, dto: UpdateLabelDto): Promise<Label> {
     try {
       const label = await this.findOneById(id);
       Object.assign(label, dto);
@@ -103,7 +103,7 @@ export class LabelService {
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: number): Promise<void> {
     try {
       const label = await this.findOneById(id);
       await this.labelRepository.remove(label);

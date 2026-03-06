@@ -38,10 +38,11 @@ export class BoardQueryDto {
   @IsEnum(TaskPriority)
   priority?: TaskPriority;
 
-  @ApiPropertyOptional({ description: 'Filter tasks by label UUID' })
+  @ApiPropertyOptional({ description: 'Filter tasks by label ID' })
   @IsOptional()
-  @IsUUID()
-  labelId?: string;
+  @Type(() => Number)
+  @IsInt()
+  labelId?: number;
 
   @ApiPropertyOptional({
     description: 'Case-insensitive partial match on task title',

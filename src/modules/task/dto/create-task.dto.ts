@@ -10,6 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { TaskPriority, TaskStatus } from '../task.entity';
 
 export class CreateTaskDto {
@@ -70,11 +71,12 @@ export class CreateTaskDto {
   assignee_ids?: string[];
 
   @ApiPropertyOptional({
-    example: ['a1b2c3d4-e5f6-7890-abcd-ef1234567890'],
-    description: 'Array of label UUIDs to attach',
+    example: [1, 2],
+    description: 'Array of label IDs to attach',
   })
   @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true })
-  label_ids?: string[];
+  @Type(() => Number)
+  @IsInt({ each: true })
+  label_ids?: number[];
 }
