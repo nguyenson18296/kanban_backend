@@ -222,7 +222,7 @@ export class TaskService {
     }
   }
 
-  async addLabels(taskId: string, labelIds: string[]): Promise<Task> {
+  async addLabels(taskId: string, labelIds: number[]): Promise<Task> {
     try {
       const task = await this.findOneById(taskId);
       const labels = await this.resolveLabels(labelIds);
@@ -242,7 +242,7 @@ export class TaskService {
     }
   }
 
-  async removeLabels(taskId: string, labelIds: string[]): Promise<Task> {
+  async removeLabels(taskId: string, labelIds: number[]): Promise<Task> {
     try {
       const task = await this.findOneById(taskId);
       await this.resolveLabels(labelIds);
@@ -326,7 +326,7 @@ export class TaskService {
     return column;
   }
 
-  private async resolveLabels(ids: string[]): Promise<Label[]> {
+  private async resolveLabels(ids: number[]): Promise<Label[]> {
     const labels = await this.labelRepository.findBy({ id: In(ids) });
     if (labels.length !== ids.length) {
       const foundIds = new Set(labels.map((l) => l.id));

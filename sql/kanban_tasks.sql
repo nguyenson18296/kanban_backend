@@ -61,7 +61,7 @@ CREATE TRIGGER trg_kanban_columns_updated_at
 -- ============================================
 
 CREATE TABLE labels (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              SERIAL PRIMARY KEY,
     name            VARCHAR(50) NOT NULL,
     color           VARCHAR(20) NOT NULL,                  -- e.g. '#EF4444'
     created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -173,7 +173,7 @@ CREATE INDEX idx_task_assignees_user_id ON task_assignees (user_id);
 
 CREATE TABLE task_labels (
     task_id         UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    label_id        UUID NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+    label_id        INT NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
     assigned_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (task_id, label_id)

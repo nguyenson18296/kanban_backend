@@ -6,7 +6,7 @@ import {
   Delete,
   Body,
   Param,
-  ParseUUIDPipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { LabelService } from './label.service';
@@ -36,29 +36,29 @@ export class LabelController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a label by ID' })
-  @ApiParam({ name: 'id', description: 'Label UUID' })
+  @ApiParam({ name: 'id', description: 'Label ID' })
   @ApiResponse({ status: 200, description: 'Label found', type: Label })
   @ApiResponse({ status: 404, description: 'Label not found' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id', ParseIntPipe) id: number) {
     return this.labelService.findOneById(id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a label' })
-  @ApiParam({ name: 'id', description: 'Label UUID' })
+  @ApiParam({ name: 'id', description: 'Label ID' })
   @ApiResponse({ status: 200, description: 'Label updated', type: Label })
   @ApiResponse({ status: 404, description: 'Label not found' })
   @ApiResponse({ status: 409, description: 'Label name already exists' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateLabelDto) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateLabelDto) {
     return this.labelService.update(id, dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a label' })
-  @ApiParam({ name: 'id', description: 'Label UUID' })
+  @ApiParam({ name: 'id', description: 'Label ID' })
   @ApiResponse({ status: 200, description: 'Label deleted' })
   @ApiResponse({ status: 404, description: 'Label not found' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  remove(@Param('id', ParseIntPipe) id: number) {
     return this.labelService.remove(id);
   }
 }

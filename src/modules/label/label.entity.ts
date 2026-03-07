@@ -11,9 +11,9 @@ import { Task } from '../task/task.entity';
 
 @Entity('labels')
 export class Label {
-  @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @ApiProperty({ example: 1 })
+  @PrimaryGeneratedColumn('increment')
+  id: number;
 
   @ApiProperty({ example: 'Bug' })
   @Column({ type: 'varchar', length: 50, unique: true })
