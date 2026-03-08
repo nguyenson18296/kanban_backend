@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsDate,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -60,6 +61,12 @@ export class CreateTaskDto {
   @IsOptional()
   @IsUUID()
   created_by?: string;
+
+  @ApiPropertyOptional({ example: '2025-02-01T00:00:00.000Z' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  due_date?: Date;
 
   @ApiPropertyOptional({
     example: ['a1b2c3d4-e5f6-7890-abcd-ef1234567890'],

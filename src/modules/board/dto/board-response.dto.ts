@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TaskPriority, TaskStatus } from '../../task/task.entity';
 
 export class BoardAssigneeDto {
@@ -46,6 +46,9 @@ export class BoardTaskDto {
 
   @ApiProperty({ example: '2025-01-15T10:30:00.000Z' })
   created_at: Date;
+
+  @ApiPropertyOptional({ example: '2025-02-01T00:00:00.000Z', nullable: true })
+  due_date: Date | null;
 
   @ApiProperty({ type: [BoardAssigneeDto] })
   assignees: BoardAssigneeDto[];
