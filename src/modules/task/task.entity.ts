@@ -123,6 +123,10 @@ export class Task {
   })
   labels: Label[];
 
+  @ApiProperty({ example: '2025-02-01T00:00:00.000Z', nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
+  due_date: Date;
+
   @ApiProperty({ example: '2025-01-01T00:00:00.000Z' })
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;

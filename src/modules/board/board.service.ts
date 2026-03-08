@@ -108,6 +108,7 @@ export class BoardService {
           'task.priority',
           'task.created_at',
           'task.column_id',
+          'task.due_date',
         ])
         .leftJoin('task.assignees', 'assignee')
         .addSelect(['assignee.id', 'assignee.full_name', 'assignee.avatar_url'])
@@ -152,6 +153,7 @@ export class BoardService {
             status: t.status,
             priority: t.priority,
             created_at: t.created_at,
+            due_date: t.due_date,
             assignees: (t.assignees ?? []).map((a) => ({
               id: a.id,
               full_name: a.full_name,
