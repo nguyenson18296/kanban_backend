@@ -1,4 +1,8 @@
-import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
+import {
+  ApiHideProperty,
+  ApiProperty,
+  ApiPropertyOptional,
+} from '@nestjs/swagger';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -7,6 +11,7 @@ import {
   UpdateDateColumn,
   Index,
   ManyToOne,
+  OneToMany,
   ManyToMany,
   JoinColumn,
   JoinTable,
@@ -122,6 +127,23 @@ export class Task {
     inverseJoinColumn: { name: 'label_id', referencedColumnName: 'id' },
   })
   labels: Label[];
+
+  @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  @Index('idx_tasks_parent_id')
+  @Column({ type: 'uuid', nullable: true })
+  parent_id: string | null;
+
+  @ApiHideProperty()
+  @ManyToOne(() => Task, (task) => task.subtasks, {
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'parent_id' })
+  parent: Task | null;
+
+  @ApiProperty({ type: () => [Task] })
+  @OneToMany(() => Task, (task) => task.parent)
+  subtasks: Task[];
 
   @ApiProperty({ example: '2025-02-01T00:00:00.000Z', nullable: true })
   @Column({ type: 'timestamptz', nullable: true })

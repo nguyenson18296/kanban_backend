@@ -56,12 +56,22 @@ export class KanbanColumnService {
     }
   }
 
-  async findAll(): Promise<KanbanColumn[]> {
+  async findAll(): Promise<{
+    data: KanbanColumn[];
+    status: number;
+    success: boolean;
+    message?: string;
+  }> {
     try {
-      return await this.columnRepository.find({
+      const columns = await this.columnRepository.find({
         where: { is_archived: false },
         order: { position: 'ASC' },
       });
+      return {
+        data: columns,
+        status: HttpStatus.OK,
+        success: true,
+      };
     } catch (error) {
       this.logger.error('Failed to fetch columns', (error as Error).stack);
       throw new InternalServerErrorException({

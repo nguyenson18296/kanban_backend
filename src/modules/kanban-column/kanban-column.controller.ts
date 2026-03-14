@@ -13,6 +13,7 @@ import { KanbanColumnService } from './kanban-column.service';
 import { KanbanColumn } from './kanban-column.entity';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { UpdateKanbanColumnDto } from './dto/update-kanban-column.dto';
+import { ColumnListResponseDto } from './dto/column-list-response.dto';
 
 @ApiTags('Columns')
 @Controller('columns')
@@ -36,7 +37,7 @@ export class KanbanColumnController {
   @ApiResponse({
     status: 200,
     description: 'List of columns',
-    type: [KanbanColumn],
+    type: ColumnListResponseDto,
   })
   findAll() {
     return this.columnService.findAll();
