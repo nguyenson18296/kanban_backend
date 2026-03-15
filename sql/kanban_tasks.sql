@@ -93,6 +93,8 @@ CREATE TABLE tasks (
     column_id       INT NOT NULL REFERENCES kanban_columns(id) ON DELETE RESTRICT,
     team_id         INT REFERENCES teams(id) ON DELETE SET NULL,
     created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    parent_id       UUID REFERENCES tasks(id) ON DELETE CASCADE,  -- NULL = top-level task, set = subtask (max 1 level deep)
+    due_date        TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -105,6 +107,7 @@ CREATE INDEX idx_tasks_status ON tasks (status);
 CREATE INDEX idx_tasks_priority ON tasks (priority);
 CREATE INDEX idx_tasks_team_id ON tasks (team_id);
 CREATE INDEX idx_tasks_created_by ON tasks (created_by);
+CREATE INDEX idx_tasks_parent_id ON tasks (parent_id);
 CREATE OR REPLACE FUNCTION fn_set_ticket_id()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -473,3 +476,66 @@ SELECT json_build_object('columns',
 --     GET /api/board/aB3kM9xZ?priority=high&assigneeId=<uuid>&tasksPerColumn=10
 -- -------------------------------------------------
 -- Combine the WHERE clauses from 9g–9j and adjust LIMIT to tasksPerColumn value.
+
+
+-- ============================================
+-- 10. SUBTASKS
+-- ============================================
+-- Subtasks reuse the tasks table via self-referencing parent_id.
+-- A task with parent_id = NULL is a top-level task.
+-- A task with parent_id set is a subtask.
+-- Nesting is limited to 1 level (enforced at application layer).
+-- ON DELETE CASCADE: deleting a parent auto-deletes its subtasks.
+
+-- -------------------------------------------------
+-- 10a. CREATE a subtask under a parent task
+-- -------------------------------------------------
+-- INSERT INTO tasks (title, priority, column_id, position, parent_id)
+-- VALUES (
+--     'Write unit tests for login form',
+--     'high',
+--     (SELECT column_id FROM tasks WHERE id = 'parent-task-uuid'),  -- inherit parent's column
+--     0,
+--     'parent-task-uuid'
+-- );
+
+-- -------------------------------------------------
+-- 10b. GET all subtasks of a parent task
+--      GET /api/tasks/:id/subtasks
+-- -------------------------------------------------
+-- SELECT * FROM tasks
+-- WHERE parent_id = 'parent-task-uuid'
+-- ORDER BY position ASC;
+
+-- -------------------------------------------------
+-- 10c. GET top-level tasks only (exclude subtasks)
+--      GET /api/tasks
+-- -------------------------------------------------
+-- SELECT * FROM tasks
+-- WHERE parent_id IS NULL;
+
+-- -------------------------------------------------
+-- 10d. GET a task with its subtasks
+--      GET /api/tasks/:id
+-- -------------------------------------------------
+-- SELECT t.*,
+--        (SELECT COALESCE(json_agg(s ORDER BY s.position), '[]'::json)
+--         FROM tasks s WHERE s.parent_id = t.id) AS subtasks
+-- FROM tasks t
+-- WHERE t.id = 'task-uuid-here';
+
+-- -------------------------------------------------
+-- 10e. COUNT subtasks per parent task
+-- -------------------------------------------------
+-- SELECT parent_id, COUNT(*) AS subtask_count
+-- FROM tasks
+-- WHERE parent_id IS NOT NULL
+-- GROUP BY parent_id
+-- ORDER BY subtask_count DESC;
+
+-- -------------------------------------------------
+-- 10f. DELETE a parent (subtasks cascade-deleted automatically)
+-- -------------------------------------------------
+-- DELETE FROM tasks WHERE id = 'parent-task-uuid';
+-- The ON DELETE CASCADE constraint automatically removes all rows
+-- where parent_id = 'parent-task-uuid'.

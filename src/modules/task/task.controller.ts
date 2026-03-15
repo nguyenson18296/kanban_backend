@@ -12,11 +12,13 @@ import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { TaskService } from './task.service';
 import { Task } from './task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { ManageAssigneesDto } from './dto/manage-assignees.dto';
 import { ManageLabelsDto } from './dto/manage-labels.dto';
 import { ReorderTaskDto } from './dto/reorder-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
+import { SubtaskListResponseDto } from './dto/subtask-list-response.dto';
 
 @ApiTags('Tasks')
 @Controller('tasks')
@@ -89,6 +91,35 @@ export class TaskController {
   @ApiResponse({ status: 404, description: 'Task not found' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.taskService.remove(id);
+  }
+
+  @Post(':id/subtasks')
+  @ApiOperation({ summary: 'Create a subtask under a parent task' })
+  @ApiParam({ name: 'id', description: 'Parent task UUID' })
+  @ApiResponse({ status: 201, description: 'Subtask created', type: Task })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot nest subtasks deeper than 1 level',
+  })
+  @ApiResponse({ status: 404, description: 'Parent task not found' })
+  createSubtask(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateSubtaskDto,
+  ) {
+    return this.taskService.createSubtask(id, dto);
+  }
+
+  @Get(':id/subtasks')
+  @ApiOperation({ summary: 'List all subtasks of a task' })
+  @ApiParam({ name: 'id', description: 'Parent task UUID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of subtasks',
+    type: SubtaskListResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  findSubtasks(@Param('id', ParseUUIDPipe) id: string) {
+    return this.taskService.findSubtasks(id);
   }
 
   @Post(':id/assignees')

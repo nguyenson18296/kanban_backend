@@ -69,6 +69,14 @@ export class CreateTaskDto {
   due_date?: Date;
 
   @ApiPropertyOptional({
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    description: 'UUID of the parent task (makes this a subtask)',
+  })
+  @IsOptional()
+  @IsUUID()
+  parent_id?: string;
+
+  @ApiPropertyOptional({
     example: ['a1b2c3d4-e5f6-7890-abcd-ef1234567890'],
     description: 'Array of user UUIDs to assign',
   })
