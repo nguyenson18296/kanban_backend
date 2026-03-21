@@ -322,6 +322,49 @@ END;
 $$ LANGUAGE plpgsql;
 
 
+-- 8d. Reorder a subtask within its parent
+CREATE OR REPLACE FUNCTION fn_reorder_subtask(
+    p_subtask_id   UUID,
+    p_parent_id    UUID,
+    p_new_position INT
+)
+RETURNS VOID AS $$
+DECLARE
+    v_old_position INT;
+BEGIN
+    SELECT position INTO v_old_position
+    FROM tasks WHERE id = p_subtask_id AND parent_id = p_parent_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Subtask "%" not found under parent "%"', p_subtask_id, p_parent_id;
+    END IF;
+
+    IF v_old_position = p_new_position THEN
+        RETURN;
+    END IF;
+
+    -- Shift sibling subtasks between old and new position
+    IF p_new_position < v_old_position THEN
+        -- Moving up: shift others down
+        UPDATE tasks
+        SET position = position + 1
+        WHERE parent_id = p_parent_id
+          AND position >= p_new_position
+          AND position < v_old_position;
+    ELSE
+        -- Moving down: shift others up
+        UPDATE tasks
+        SET position = position - 1
+        WHERE parent_id = p_parent_id
+          AND position > v_old_position
+          AND position <= p_new_position;
+    END IF;
+
+    UPDATE tasks SET position = p_new_position WHERE id = p_subtask_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
 -- ============================================
 -- 9. EXAMPLE QUERIES
 -- ============================================

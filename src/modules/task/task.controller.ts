@@ -17,6 +17,7 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { ManageAssigneesDto } from './dto/manage-assignees.dto';
 import { ManageLabelsDto } from './dto/manage-labels.dto';
 import { ReorderTaskDto } from './dto/reorder-task.dto';
+import { ReorderSubtaskDto } from './dto/reorder-subtask.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
 import { SubtaskListResponseDto } from './dto/subtask-list-response.dto';
 
@@ -120,6 +121,24 @@ export class TaskController {
   @ApiResponse({ status: 404, description: 'Task not found' })
   findSubtasks(@Param('id', ParseUUIDPipe) id: string) {
     return this.taskService.findSubtasks(id);
+  }
+
+  @Patch(':id/subtasks/:subtaskId/reorder')
+  @ApiOperation({ summary: 'Reorder a subtask within its parent' })
+  @ApiParam({ name: 'id', description: 'Parent task UUID' })
+  @ApiParam({ name: 'subtaskId', description: 'Subtask UUID' })
+  @ApiResponse({ status: 200, description: 'Subtask reordered', type: Task })
+  @ApiResponse({
+    status: 400,
+    description: 'Subtask does not belong to parent',
+  })
+  @ApiResponse({ status: 404, description: 'Task or subtask not found' })
+  reorderSubtask(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('subtaskId', ParseUUIDPipe) subtaskId: string,
+    @Body() dto: ReorderSubtaskDto,
+  ) {
+    return this.taskService.reorderSubtask(id, subtaskId, dto.position);
   }
 
   @Post(':id/assignees')
