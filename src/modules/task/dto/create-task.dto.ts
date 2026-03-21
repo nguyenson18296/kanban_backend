@@ -11,7 +11,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { TaskPriority, TaskStatus } from '../task.entity';
 
 export class CreateTaskDto {
@@ -51,6 +51,7 @@ export class CreateTaskDto {
 
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()
+  @Transform(({ value }) => (value === 0 ? undefined : value))
   @IsInt()
   team_id?: number;
 
@@ -64,7 +65,11 @@ export class CreateTaskDto {
 
   @ApiPropertyOptional({ example: '2025-02-01T00:00:00.000Z' })
   @IsOptional()
-  @Type(() => Date)
+  @Transform(({ value }) => {
+    if (value === undefined) return undefined;
+    if (value === '' || value === null) return null;
+    return new Date(value);
+  })
   @IsDate()
   due_date?: Date;
 

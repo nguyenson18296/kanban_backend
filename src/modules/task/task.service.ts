@@ -336,6 +336,35 @@ export class TaskService {
     }
   }
 
+  async reorderSubtask(
+    parentId: string,
+    subtaskId: string,
+    position: number,
+  ): Promise<Task> {
+    try {
+      await this.ensureTaskExists(parentId);
+      // Defined in sql/kanban_tasks.sql (section 8d)
+      // Atomically validates subtask belongs to parent and reorders
+      await this.dataSource.query(
+        'SELECT fn_reorder_subtask($1::uuid, $2::uuid, $3::int)',
+        [subtaskId, parentId, position],
+      );
+      return this.findOneById(subtaskId);
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      )
+        throw error;
+      this.logger.error('Failed to reorder subtask', (error as Error).stack);
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to reorder subtask',
+        error: (error as Error).message,
+      });
+    }
+  }
+
   async createSubtask(parentId: string, dto: CreateSubtaskDto): Promise<Task> {
     try {
       const parent = await this.findOneById(parentId);
