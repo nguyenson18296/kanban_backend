@@ -84,7 +84,7 @@ export class TaskService {
     try {
       return await this.taskRepository.find({
         where: { parent_id: IsNull() },
-        relations: ['assignees', 'labels', 'creator', 'subtasks'],
+        relations: ['assignees', 'labels', 'creator', 'subtasks', 'subtasks.parent'],
       });
     } catch (error) {
       this.logger.error('Failed to fetch tasks', (error as Error).stack);
@@ -100,7 +100,7 @@ export class TaskService {
     try {
       const task = await this.taskRepository.findOne({
         where: { ticket_id: ticketId },
-        relations: ['assignees', 'labels', 'creator', 'subtasks'],
+        relations: ['assignees', 'labels', 'creator', 'subtasks', 'subtasks.parent', 'parent'],
       });
       if (!task) {
         throw new NotFoundException({
@@ -127,7 +127,7 @@ export class TaskService {
     try {
       const task = await this.taskRepository.findOne({
         where: { id },
-        relations: ['assignees', 'labels', 'creator', 'subtasks'],
+        relations: ['assignees', 'labels', 'creator', 'subtasks', 'subtasks.parent', 'parent'],
       });
       if (!task) {
         throw new NotFoundException({
@@ -401,7 +401,7 @@ export class TaskService {
       await this.ensureTaskExists(parentId);
       const subtasks = await this.taskRepository.find({
         where: { parent_id: parentId },
-        relations: ['assignees', 'labels', 'creator', 'subtasks'],
+        relations: ['assignees', 'labels', 'creator', 'subtasks', 'parent'],
         order: { position: 'ASC' },
       });
       return {
