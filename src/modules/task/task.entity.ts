@@ -133,7 +133,31 @@ export class Task {
   @Column({ type: 'uuid', nullable: true })
   parent_id: string | null;
 
-  @ApiHideProperty()
+  @ApiPropertyOptional({
+    description:
+      'Parent task summary. Contains full summary when the relation is loaded, only { id } when not loaded, or null for top-level tasks.',
+    nullable: true,
+    oneOf: [
+      {
+        type: 'object',
+        properties: {
+          ticket_id: { type: 'string', example: 'KAN-1' },
+          title: { type: 'string', example: 'Implement login page' },
+          column_id: { type: 'number', example: 1 },
+        },
+      },
+      {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          },
+        },
+      },
+      { type: 'null' },
+    ],
+  })
   @ManyToOne(() => Task, (task) => task.subtasks, {
     nullable: true,
     onDelete: 'CASCADE',
@@ -159,7 +183,28 @@ export class Task {
 
   toJSON() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { created_by, ...rest } = this;
-    return rest;
+    const { created_by, parent, parent_id, ...rest } = this;
+
+    let parentValue: object | null | undefined;
+    if (parent === undefined) {
+      // Relation not loaded — fall back to parent_id so clients can
+      // still distinguish subtasks from top-level tasks.
+      parentValue = parent_id ? { id: parent_id } : undefined;
+    } else if (parent === null) {
+      // Explicitly no parent (top-level task).
+      parentValue = null;
+    } else {
+      parentValue = {
+        ticket_id: parent.ticket_id,
+        title: parent.title,
+        column_id: parent.column_id,
+      };
+    }
+
+    const result: Record<string, any> = { ...rest, parent_id };
+    if (parentValue !== undefined) {
+      result.parent = parentValue;
+    }
+    return result;
   }
 }
