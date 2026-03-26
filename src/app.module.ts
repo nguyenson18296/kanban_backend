@@ -11,6 +11,7 @@ import { KanbanColumnModule } from './modules/kanban-column/kanban-column.module
 import { LabelModule } from './modules/label/label.module';
 import { TaskModule } from './modules/task/task.module';
 import { BoardModule } from './modules/board/board.module';
+import { CommentModule } from './modules/comment/comment.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { BoardModule } from './modules/board/board.module';
     LabelModule,
     TaskModule,
     BoardModule,
+    CommentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
