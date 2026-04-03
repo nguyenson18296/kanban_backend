@@ -2,9 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateTaskComments1742860800000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `CREATE EXTENSION IF NOT EXISTS "pgcrypto"`,
-    );
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
     await queryRunner.query(`
       CREATE TABLE task_comments (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
