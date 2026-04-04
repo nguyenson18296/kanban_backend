@@ -22,7 +22,7 @@ const SANITIZE_OPTIONS: IOptions = {
   ],
   allowedAttributes: {
     a: ['href', 'target', 'rel'],
-    span: ['class'],
+    span: ['class', 'data-mention-id', 'data-mention'],
   },
   allowedSchemes: ['http', 'https', 'mailto'],
   // Force safe link attributes

@@ -11,7 +11,9 @@ import { KanbanColumnModule } from './modules/kanban-column/kanban-column.module
 import { LabelModule } from './modules/label/label.module';
 import { TaskModule } from './modules/task/task.module';
 import { BoardModule } from './modules/board/board.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommentModule } from './modules/comment/comment.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -35,6 +37,7 @@ import { CommentModule } from './modules/comment/comment.module';
         },
       }),
     }),
+    EventEmitterModule.forRoot(),
     UserModule,
     TeamModule,
     AuthModule,
@@ -44,6 +47,7 @@ import { CommentModule } from './modules/comment/comment.module';
     TaskModule,
     BoardModule,
     CommentModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

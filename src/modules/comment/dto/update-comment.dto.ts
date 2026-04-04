@@ -10,6 +10,8 @@ export class UpdateCommentDto {
   })
   @IsString()
   @IsNotEmpty()
-  @Transform(({ value }) => (typeof value === 'string' ? sanitize(value) : value))
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? sanitize(value) : value,
+  )
   content: string;
 }
