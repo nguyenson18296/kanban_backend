@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Task } from './task.entity';
 import { User } from '../user/user.entity';
 import { Label } from '../label/label.entity';
@@ -15,6 +16,10 @@ import { KanbanColumn } from '../kanban-column/kanban-column.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import {
+  NOTIFICATION_EVENTS,
+  TaskUpdatedEvent,
+} from '../notification/events/notification.events';
 
 @Injectable()
 export class TaskService {
@@ -30,6 +35,7 @@ export class TaskService {
     @InjectRepository(KanbanColumn)
     private readonly columnRepository: Repository<KanbanColumn>,
     private readonly dataSource: DataSource,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private async ensureTaskExists(id: string): Promise<void> {
@@ -167,10 +173,16 @@ export class TaskService {
     }
   }
 
-  async update(id: string, dto: UpdateTaskDto): Promise<Task> {
+  async update(
+    id: string,
+    dto: UpdateTaskDto,
+    actorId?: string,
+  ): Promise<Task> {
     try {
       const task = await this.findOneById(id);
       const { assignee_ids, label_ids, ...taskData } = dto;
+      const previousStatus = task.status;
+      const originalCreatedBy = task.created_by;
 
       if (taskData.parent_id !== undefined) {
         if (taskData.parent_id !== null) {
@@ -206,7 +218,29 @@ export class TaskService {
       }
 
       await this.taskRepository.save(task);
-      return this.findOneById(id);
+      const updated = await this.findOneById(id);
+
+      // Notify task creator when status changes
+      if (
+        actorId &&
+        taskData.status &&
+        taskData.status !== previousStatus &&
+        originalCreatedBy
+      ) {
+        this.eventEmitter.emit(
+          NOTIFICATION_EVENTS.TASK_UPDATED,
+          new TaskUpdatedEvent(actorId, task.id, [originalCreatedBy], {
+            task_id: task.id,
+            task_title: task.title,
+            ticket_id: task.ticket_id,
+            changes: {
+              status: { from: previousStatus, to: taskData.status },
+            },
+          }),
+        );
+      }
+
+      return updated;
     } catch (error) {
       if (
         error instanceof NotFoundException ||
