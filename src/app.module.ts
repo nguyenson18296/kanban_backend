@@ -14,6 +14,7 @@ import { BoardModule } from './modules/board/board.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommentModule } from './modules/comment/comment.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { ActivityModule } from './modules/activity/activity.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     BoardModule,
     CommentModule,
     NotificationModule,
+    ActivityModule,
   ],
   controllers: [AppController],
   providers: [AppService],
