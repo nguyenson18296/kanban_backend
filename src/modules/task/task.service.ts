@@ -20,6 +20,11 @@ import {
   NOTIFICATION_EVENTS,
   TaskUpdatedEvent,
 } from '../notification/events/notification.events';
+import {
+  ACTIVITY_EVENTS,
+  TaskActivityAction,
+  TaskActivityEvent,
+} from '../activity/events/activity.events';
 
 @Injectable()
 export class TaskService {
@@ -48,7 +53,7 @@ export class TaskService {
     }
   }
 
-  async create(dto: CreateTaskDto): Promise<Task> {
+  async create(dto: CreateTaskDto, actorId?: string): Promise<Task> {
     try {
       const { assignee_ids, label_ids, ...taskData } = dto;
 
@@ -70,7 +75,18 @@ export class TaskService {
 
       const saved = await this.taskRepository.save(task);
 
-      return this.findOneById(saved.id);
+      const result = await this.findOneById(saved.id);
+      if (actorId) {
+        this.eventEmitter.emit(
+          ACTIVITY_EVENTS.TASK_CREATED,
+          new TaskActivityEvent(
+            actorId,
+            saved.id,
+            TaskActivityAction.TASK_CREATED,
+          ),
+        );
+      }
+      return result;
     } catch (error) {
       if (
         error instanceof NotFoundException ||
@@ -183,6 +199,14 @@ export class TaskService {
       const { assignee_ids, label_ids, ...taskData } = dto;
       const previousStatus = task.status;
       const originalCreatedBy = task.created_by;
+      const previousTitle = task.title;
+      const previousDescription = task.description;
+      const previousPriority = task.priority;
+      const previousDueDate = task.due_date;
+      const previousAssignees = [...task.assignees];
+      const previousAssigneeIds = new Set(previousAssignees.map((u) => u.id));
+      const previousLabels = [...task.labels];
+      const previousLabelIds = new Set(previousLabels.map((l) => l.id));
 
       if (taskData.parent_id !== undefined) {
         if (taskData.parent_id !== null) {
@@ -205,16 +229,18 @@ export class TaskService {
 
       Object.assign(task, taskData);
 
+      let newAssignees: User[] | undefined;
       if (assignee_ids !== undefined) {
-        task.assignees = assignee_ids.length
+        newAssignees = assignee_ids.length
           ? await this.resolveUsers(assignee_ids)
           : [];
+        task.assignees = newAssignees;
       }
 
+      let newLabels: Label[] | undefined;
       if (label_ids !== undefined) {
-        task.labels = label_ids.length
-          ? await this.resolveLabels(label_ids)
-          : [];
+        newLabels = label_ids.length ? await this.resolveLabels(label_ids) : [];
+        task.labels = newLabels;
       }
 
       await this.taskRepository.save(task);
@@ -223,7 +249,7 @@ export class TaskService {
       // Notify task creator when status changes
       if (
         actorId &&
-        taskData.status &&
+        taskData.status !== undefined &&
         taskData.status !== previousStatus &&
         originalCreatedBy
       ) {
@@ -238,6 +264,174 @@ export class TaskService {
             },
           }),
         );
+      }
+
+      // Emit activity events for changed fields
+      if (actorId) {
+        if (taskData.title !== undefined && taskData.title !== previousTitle) {
+          this.eventEmitter.emit(
+            ACTIVITY_EVENTS.TASK_TITLE_UPDATED,
+            new TaskActivityEvent(
+              actorId,
+              task.id,
+              TaskActivityAction.TASK_TITLE_UPDATED,
+            ),
+          );
+        }
+        if (
+          taskData.description !== undefined &&
+          taskData.description !== previousDescription
+        ) {
+          this.eventEmitter.emit(
+            ACTIVITY_EVENTS.TASK_DESCRIPTION_UPDATED,
+            new TaskActivityEvent(
+              actorId,
+              task.id,
+              TaskActivityAction.TASK_DESCRIPTION_UPDATED,
+            ),
+          );
+        }
+        if (
+          taskData.status !== undefined &&
+          taskData.status !== previousStatus
+        ) {
+          this.eventEmitter.emit(
+            ACTIVITY_EVENTS.TASK_STATUS_CHANGED,
+            new TaskActivityEvent(
+              actorId,
+              task.id,
+              TaskActivityAction.TASK_STATUS_CHANGED,
+              { from: previousStatus, to: taskData.status },
+            ),
+          );
+        }
+        if (
+          taskData.priority !== undefined &&
+          taskData.priority !== previousPriority
+        ) {
+          this.eventEmitter.emit(
+            ACTIVITY_EVENTS.TASK_PRIORITY_CHANGED,
+            new TaskActivityEvent(
+              actorId,
+              task.id,
+              TaskActivityAction.TASK_PRIORITY_CHANGED,
+              { from: previousPriority, to: taskData.priority },
+            ),
+          );
+        }
+        if (taskData.due_date !== undefined) {
+          const prevTime = previousDueDate
+            ? new Date(previousDueDate).getTime()
+            : null;
+          const newTime = taskData.due_date
+            ? new Date(taskData.due_date).getTime()
+            : null;
+          if (prevTime !== newTime) {
+            this.eventEmitter.emit(
+              ACTIVITY_EVENTS.TASK_DUE_DATE_CHANGED,
+              new TaskActivityEvent(
+                actorId,
+                task.id,
+                TaskActivityAction.TASK_DUE_DATE_CHANGED,
+                {
+                  from: previousDueDate
+                    ? new Date(previousDueDate).toISOString()
+                    : null,
+                  to: taskData.due_date
+                    ? new Date(taskData.due_date).toISOString()
+                    : null,
+                },
+              ),
+            );
+          }
+        }
+
+        // Emit activity events for assignee changes via update()
+        if (newAssignees !== undefined) {
+          const newAssigneeIds = new Set(newAssignees.map((u) => u.id));
+          const addedUsers = newAssignees.filter(
+            (u) => !previousAssigneeIds.has(u.id),
+          );
+          const removedUsers = previousAssignees.filter(
+            (u) => !newAssigneeIds.has(u.id),
+          );
+          if (addedUsers.length > 0) {
+            this.eventEmitter.emit(
+              ACTIVITY_EVENTS.TASK_ASSIGNEE_ADDED,
+              new TaskActivityEvent(
+                actorId,
+                task.id,
+                TaskActivityAction.TASK_ASSIGNEE_ADDED,
+                {
+                  users: addedUsers.map((u) => ({
+                    user_id: u.id,
+                    full_name: u.full_name,
+                  })),
+                },
+              ),
+            );
+          }
+          if (removedUsers.length > 0) {
+            this.eventEmitter.emit(
+              ACTIVITY_EVENTS.TASK_ASSIGNEE_REMOVED,
+              new TaskActivityEvent(
+                actorId,
+                task.id,
+                TaskActivityAction.TASK_ASSIGNEE_REMOVED,
+                {
+                  users: removedUsers.map((u) => ({
+                    user_id: u.id,
+                    full_name: u.full_name,
+                  })),
+                },
+              ),
+            );
+          }
+        }
+
+        // Emit activity events for label changes via update()
+        if (newLabels !== undefined) {
+          const newLabelIds = new Set(newLabels.map((l) => l.id));
+          const addedLabels = newLabels.filter(
+            (l) => !previousLabelIds.has(l.id),
+          );
+          const removedLabels = previousLabels.filter(
+            (l) => !newLabelIds.has(l.id),
+          );
+          if (addedLabels.length > 0) {
+            this.eventEmitter.emit(
+              ACTIVITY_EVENTS.TASK_LABEL_ADDED,
+              new TaskActivityEvent(
+                actorId,
+                task.id,
+                TaskActivityAction.TASK_LABEL_ADDED,
+                {
+                  labels: addedLabels.map((l) => ({
+                    label_id: l.id,
+                    label_name: l.name,
+                    color: l.color,
+                  })),
+                },
+              ),
+            );
+          }
+          if (removedLabels.length > 0) {
+            this.eventEmitter.emit(
+              ACTIVITY_EVENTS.TASK_LABEL_REMOVED,
+              new TaskActivityEvent(
+                actorId,
+                task.id,
+                TaskActivityAction.TASK_LABEL_REMOVED,
+                {
+                  labels: removedLabels.map((l) => ({
+                    label_id: l.id,
+                    label_name: l.name,
+                  })),
+                },
+              ),
+            );
+          }
+        }
       }
 
       return updated;
@@ -271,7 +465,11 @@ export class TaskService {
     }
   }
 
-  async addAssignees(taskId: string, userIds: string[]): Promise<Task> {
+  async addAssignees(
+    taskId: string,
+    userIds: string[],
+    actorId?: string,
+  ): Promise<Task> {
     try {
       const task = await this.findOneById(taskId);
       const users = await this.resolveUsers(userIds);
@@ -279,7 +477,24 @@ export class TaskService {
       const newUsers = users.filter((u) => !existingIds.has(u.id));
       task.assignees = [...task.assignees, ...newUsers];
       await this.taskRepository.save(task);
-      return this.findOneById(taskId);
+      const result = await this.findOneById(taskId);
+      if (actorId && newUsers.length > 0) {
+        this.eventEmitter.emit(
+          ACTIVITY_EVENTS.TASK_ASSIGNEE_ADDED,
+          new TaskActivityEvent(
+            actorId,
+            taskId,
+            TaskActivityAction.TASK_ASSIGNEE_ADDED,
+            {
+              users: newUsers.map((u) => ({
+                user_id: u.id,
+                full_name: u.full_name,
+              })),
+            },
+          ),
+        );
+      }
+      return result;
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to add assignees', (error as Error).stack);
@@ -291,14 +506,36 @@ export class TaskService {
     }
   }
 
-  async removeAssignees(taskId: string, userIds: string[]): Promise<Task> {
+  async removeAssignees(
+    taskId: string,
+    userIds: string[],
+    actorId?: string,
+  ): Promise<Task> {
     try {
       const task = await this.findOneById(taskId);
       await this.resolveUsers(userIds);
       const removeSet = new Set(userIds);
+      const removedUsers = task.assignees.filter((u) => removeSet.has(u.id));
       task.assignees = task.assignees.filter((u) => !removeSet.has(u.id));
       await this.taskRepository.save(task);
-      return this.findOneById(taskId);
+      const result = await this.findOneById(taskId);
+      if (actorId && removedUsers.length > 0) {
+        this.eventEmitter.emit(
+          ACTIVITY_EVENTS.TASK_ASSIGNEE_REMOVED,
+          new TaskActivityEvent(
+            actorId,
+            taskId,
+            TaskActivityAction.TASK_ASSIGNEE_REMOVED,
+            {
+              users: removedUsers.map((u) => ({
+                user_id: u.id,
+                full_name: u.full_name,
+              })),
+            },
+          ),
+        );
+      }
+      return result;
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to remove assignees', (error as Error).stack);
@@ -310,7 +547,11 @@ export class TaskService {
     }
   }
 
-  async addLabels(taskId: string, labelIds: number[]): Promise<Task> {
+  async addLabels(
+    taskId: string,
+    labelIds: number[],
+    actorId?: string,
+  ): Promise<Task> {
     try {
       const task = await this.findOneById(taskId);
       const labels = await this.resolveLabels(labelIds);
@@ -318,7 +559,24 @@ export class TaskService {
       const newLabels = labels.filter((l) => !existingIds.has(l.id));
       task.labels = [...task.labels, ...newLabels];
       await this.taskRepository.save(task);
-      return this.findOneById(taskId);
+      const result = await this.findOneById(taskId);
+      if (actorId && newLabels.length > 0) {
+        this.eventEmitter.emit(
+          ACTIVITY_EVENTS.TASK_LABEL_ADDED,
+          new TaskActivityEvent(
+            actorId,
+            taskId,
+            TaskActivityAction.TASK_LABEL_ADDED,
+            {
+              labels: newLabels.map((l) => ({
+                label_id: l.id,
+                label_name: l.name,
+              })),
+            },
+          ),
+        );
+      }
+      return result;
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to add labels', (error as Error).stack);
@@ -330,14 +588,36 @@ export class TaskService {
     }
   }
 
-  async removeLabels(taskId: string, labelIds: number[]): Promise<Task> {
+  async removeLabels(
+    taskId: string,
+    labelIds: number[],
+    actorId?: string,
+  ): Promise<Task> {
     try {
       const task = await this.findOneById(taskId);
       await this.resolveLabels(labelIds);
       const removeSet = new Set(labelIds);
+      const removedLabels = task.labels.filter((l) => removeSet.has(l.id));
       task.labels = task.labels.filter((l) => !removeSet.has(l.id));
       await this.taskRepository.save(task);
-      return this.findOneById(taskId);
+      const result = await this.findOneById(taskId);
+      if (actorId && removedLabels.length > 0) {
+        this.eventEmitter.emit(
+          ACTIVITY_EVENTS.TASK_LABEL_REMOVED,
+          new TaskActivityEvent(
+            actorId,
+            taskId,
+            TaskActivityAction.TASK_LABEL_REMOVED,
+            {
+              labels: removedLabels.map((l) => ({
+                label_id: l.id,
+                label_name: l.name,
+              })),
+            },
+          ),
+        );
+      }
+      return result;
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to remove labels', (error as Error).stack);
@@ -349,7 +629,7 @@ export class TaskService {
     }
   }
 
-  async reorder(id: string, position: number): Promise<Task> {
+  async reorder(id: string, position: number, actorId?: string): Promise<Task> {
     try {
       await this.ensureTaskExists(id);
       // Defined in sql/kanban_tasks.sql (section 8c)
@@ -357,7 +637,19 @@ export class TaskService {
         id,
         position,
       ]);
-      return this.findOneById(id);
+      const result = await this.findOneById(id);
+      if (actorId) {
+        this.eventEmitter.emit(
+          ACTIVITY_EVENTS.TASK_REORDERED,
+          new TaskActivityEvent(
+            actorId,
+            id,
+            TaskActivityAction.TASK_REORDERED,
+            { position },
+          ),
+        );
+      }
+      return result;
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to reorder task', (error as Error).stack);
@@ -369,16 +661,42 @@ export class TaskService {
     }
   }
 
-  async move(id: string, columnId: number, position: number): Promise<Task> {
+  async move(
+    id: string,
+    columnId: number,
+    position: number,
+    actorId?: string,
+  ): Promise<Task> {
     try {
-      await this.ensureTaskExists(id);
+      const current = await this.taskRepository.findOne({
+        where: { id },
+        select: ['id', 'column_id'],
+      });
+      if (!current) {
+        throw new NotFoundException({
+          statusCode: HttpStatus.NOT_FOUND,
+          message: `Task with id "${id}" not found`,
+        });
+      }
+      const previousColumnId = current.column_id;
       await this.resolveColumn(columnId);
       // Defined in sql/kanban_tasks.sql (section 8b)
       await this.dataSource.query(
         'SELECT fn_move_task($1::uuid, $2::int, $3::int)',
         [id, columnId, position],
       );
-      return this.findOneById(id);
+      const result = await this.findOneById(id);
+      if (actorId) {
+        this.eventEmitter.emit(
+          ACTIVITY_EVENTS.TASK_MOVED,
+          new TaskActivityEvent(actorId, id, TaskActivityAction.TASK_MOVED, {
+            from_column_id: previousColumnId,
+            to_column_id: columnId,
+            position,
+          }),
+        );
+      }
+      return result;
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to move task', (error as Error).stack);
@@ -419,7 +737,11 @@ export class TaskService {
     }
   }
 
-  async createSubtask(parentId: string, dto: CreateSubtaskDto): Promise<Task> {
+  async createSubtask(
+    parentId: string,
+    dto: CreateSubtaskDto,
+    actorId?: string,
+  ): Promise<Task> {
     try {
       const parent = await this.findOneById(parentId);
       await this.validateParent(parentId);
@@ -429,7 +751,7 @@ export class TaskService {
         column_id: dto.column_id ?? parent.column_id,
         parent_id: parentId,
       };
-      return this.create(createDto);
+      return this.create(createDto, actorId);
     } catch (error) {
       if (
         error instanceof NotFoundException ||

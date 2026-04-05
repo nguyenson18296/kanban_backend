@@ -36,10 +36,12 @@ export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a task' })
   @ApiResponse({ status: 201, description: 'Task created', type: Task })
-  create(@Body() dto: CreateTaskDto) {
-    return this.taskService.create(dto);
+  create(@Body() dto: CreateTaskDto, @CurrentUser('id') userId: string) {
+    return this.taskService.create(dto, userId);
   }
 
   @Get()
@@ -83,21 +85,33 @@ export class TaskController {
   }
 
   @Patch(':id/reorder')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Reorder a task within the same column' })
   @ApiParam({ name: 'id', description: 'Task UUID' })
   @ApiResponse({ status: 200, description: 'Task reordered', type: Task })
   @ApiResponse({ status: 404, description: 'Task not found' })
-  reorder(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReorderTaskDto) {
-    return this.taskService.reorder(id, dto.position);
+  reorder(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReorderTaskDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.taskService.reorder(id, dto.position, userId);
   }
 
   @Patch(':id/move')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Move a task to a different column' })
   @ApiParam({ name: 'id', description: 'Task UUID' })
   @ApiResponse({ status: 200, description: 'Task moved', type: Task })
   @ApiResponse({ status: 404, description: 'Task or column not found' })
-  move(@Param('id', ParseUUIDPipe) id: string, @Body() dto: MoveTaskDto) {
-    return this.taskService.move(id, dto.column_id, dto.position);
+  move(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MoveTaskDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.taskService.move(id, dto.column_id, dto.position, userId);
   }
 
   @Delete(':id')
@@ -110,6 +124,8 @@ export class TaskController {
   }
 
   @Post(':id/subtasks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a subtask under a parent task' })
   @ApiParam({ name: 'id', description: 'Parent task UUID' })
   @ApiResponse({ status: 201, description: 'Subtask created', type: Task })
@@ -121,8 +137,9 @@ export class TaskController {
   createSubtask(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateSubtaskDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.taskService.createSubtask(id, dto);
+    return this.taskService.createSubtask(id, dto, userId);
   }
 
   @Get(':id/subtasks')
@@ -157,6 +174,8 @@ export class TaskController {
   }
 
   @Post(':id/assignees')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Add assignees to a task' })
   @ApiParam({ name: 'id', description: 'Task UUID' })
   @ApiResponse({ status: 201, description: 'Assignees added', type: Task })
@@ -164,11 +183,14 @@ export class TaskController {
   addAssignees(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ManageAssigneesDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.taskService.addAssignees(id, dto.user_ids);
+    return this.taskService.addAssignees(id, dto.user_ids, userId);
   }
 
   @Delete(':id/assignees')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Remove assignees from a task' })
   @ApiParam({ name: 'id', description: 'Task UUID' })
   @ApiResponse({ status: 200, description: 'Assignees removed', type: Task })
@@ -176,11 +198,14 @@ export class TaskController {
   removeAssignees(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ManageAssigneesDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.taskService.removeAssignees(id, dto.user_ids);
+    return this.taskService.removeAssignees(id, dto.user_ids, userId);
   }
 
   @Post(':id/labels')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Add labels to a task' })
   @ApiParam({ name: 'id', description: 'Task UUID' })
   @ApiResponse({ status: 201, description: 'Labels added', type: Task })
@@ -188,11 +213,14 @@ export class TaskController {
   addLabels(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ManageLabelsDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.taskService.addLabels(id, dto.label_ids);
+    return this.taskService.addLabels(id, dto.label_ids, userId);
   }
 
   @Delete(':id/labels')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Remove labels from a task' })
   @ApiParam({ name: 'id', description: 'Task UUID' })
   @ApiResponse({ status: 200, description: 'Labels removed', type: Task })
@@ -200,7 +228,8 @@ export class TaskController {
   removeLabels(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ManageLabelsDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.taskService.removeLabels(id, dto.label_ids);
+    return this.taskService.removeLabels(id, dto.label_ids, userId);
   }
 }
