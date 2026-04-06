@@ -19,6 +19,7 @@ import * as crypto from 'node:crypto';
 import { Team } from '../team/team.entity';
 import { User } from '../user/user.entity';
 import { KanbanColumn } from '../kanban-column/kanban-column.entity';
+import { ProjectMember } from './project-member.entity';
 
 function generateAlphanumericId(length: number): string {
   const chars =
@@ -76,12 +77,12 @@ export class Project {
   @UpdateDateColumn({ type: 'timestamptz' })
   updated_at: Date;
 
-  @ApiHideProperty()
+  @ApiPropertyOptional({ type: () => Team, nullable: true })
   @ManyToOne(() => Team, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'team_id' })
   team: Team;
 
-  @ApiHideProperty()
+  @ApiPropertyOptional({ type: () => User, nullable: true })
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'created_by' })
   creator: User;
@@ -89,4 +90,8 @@ export class Project {
   @ApiHideProperty()
   @OneToMany(() => KanbanColumn, (column) => column.project)
   columns: KanbanColumn[];
+
+  @ApiHideProperty()
+  @OneToMany(() => ProjectMember, (member) => member.project)
+  members: ProjectMember[];
 }
