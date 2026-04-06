@@ -13,6 +13,7 @@ import { ProjectService } from './project.service';
 import { Project } from './project.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { ManageProjectMembersDto } from './dto/manage-project-members.dto';
 
 @ApiTags('Projects')
 @Controller('projects')
@@ -79,5 +80,40 @@ export class ProjectController {
   @ApiResponse({ status: 404, description: 'Project not found' })
   remove(@Param('id', ParseProjectIdPipe) id: string) {
     return this.projectService.remove(id);
+  }
+
+  // --- Project Members ---
+
+  @Get(':id/members')
+  @ApiOperation({ summary: 'Get project members' })
+  @ApiParam({ name: 'id', description: 'Project ID' })
+  @ApiResponse({ status: 200, description: 'List of project members' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  getMembers(@Param('id', ParseProjectIdPipe) id: string) {
+    return this.projectService.getMembers(id);
+  }
+
+  @Post(':id/members')
+  @ApiOperation({ summary: 'Add members to a project' })
+  @ApiParam({ name: 'id', description: 'Project ID' })
+  @ApiResponse({ status: 201, description: 'Members added' })
+  @ApiResponse({ status: 404, description: 'Project or user not found' })
+  addMembers(
+    @Param('id', ParseProjectIdPipe) id: string,
+    @Body() dto: ManageProjectMembersDto,
+  ) {
+    return this.projectService.addMembers(id, dto.user_ids);
+  }
+
+  @Delete(':id/members')
+  @ApiOperation({ summary: 'Remove members from a project' })
+  @ApiParam({ name: 'id', description: 'Project ID' })
+  @ApiResponse({ status: 200, description: 'Members removed' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  removeMembers(
+    @Param('id', ParseProjectIdPipe) id: string,
+    @Body() dto: ManageProjectMembersDto,
+  ) {
+    return this.projectService.removeMembers(id, dto.user_ids);
   }
 }
