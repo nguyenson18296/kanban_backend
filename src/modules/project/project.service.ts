@@ -67,7 +67,8 @@ export class ProjectService {
     for (let attempt = 0; attempt <= ProjectService.MAX_ID_RETRIES; attempt++) {
       try {
         const project = this.projectRepository.create({ ...dto, tag });
-        return await this.projectRepository.save(project);
+        const saved = await this.projectRepository.save(project);
+        return this.findOneById(saved.id);
       } catch (error) {
         if (error.code === '23505') {
           const isPkCollision =
@@ -126,6 +127,7 @@ export class ProjectService {
   async findAll(): Promise<Project[]> {
     try {
       return await this.projectRepository.find({
+        relations: ['team', 'creator'],
         order: { created_at: 'DESC' },
       });
     } catch (error) {
@@ -140,7 +142,10 @@ export class ProjectService {
 
   async findOneById(id: string): Promise<Project> {
     try {
-      const project = await this.projectRepository.findOneBy({ id });
+      const project = await this.projectRepository.findOne({
+        where: { id },
+        relations: ['team', 'creator'],
+      });
       if (!project) {
         throw new NotFoundException({
           statusCode: HttpStatus.NOT_FOUND,
@@ -163,7 +168,8 @@ export class ProjectService {
     try {
       const project = await this.findOneById(id);
       Object.assign(project, dto);
-      return await this.projectRepository.save(project);
+      await this.projectRepository.save(project);
+      return this.findOneById(id);
     } catch (error) {
       if (
         error instanceof NotFoundException ||
