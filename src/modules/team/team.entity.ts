@@ -1,4 +1,8 @@
-import { ApiHideProperty, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ApiHideProperty,
+  ApiProperty,
+  ApiPropertyOptional,
+} from '@nestjs/swagger';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -25,7 +29,10 @@ export class Team {
   @Column({ type: 'varchar', length: 100 })
   name: string;
 
-  @ApiPropertyOptional({ example: 'Handles server-side development', nullable: true })
+  @ApiPropertyOptional({
+    example: 'Handles server-side development',
+    nullable: true,
+  })
   @Column({ type: 'text', nullable: true })
   description: string;
 

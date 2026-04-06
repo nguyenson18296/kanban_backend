@@ -8,12 +8,7 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { ParseProjectIdPipe } from '../../common/pipes/parse-project-id.pipe';
 import { TeamService } from './team.service';
 import { CreateTeamDto } from './dto/create-team.dto';
@@ -29,7 +24,10 @@ export class TeamController {
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiResponse({ status: 201, description: 'Team created' })
   @ApiResponse({ status: 404, description: 'Project not found' })
-  @ApiResponse({ status: 409, description: 'Team name already exists in project' })
+  @ApiResponse({
+    status: 409,
+    description: 'Team name already exists in project',
+  })
   create(
     @Param('projectId', ParseProjectIdPipe) projectId: string,
     @Body() dto: CreateTeamDto,
@@ -79,7 +77,10 @@ export class TeamController {
   @ApiResponse({ status: 201, description: 'Member added' })
   @ApiResponse({ status: 400, description: 'User is not a project member' })
   @ApiResponse({ status: 404, description: 'Team not found' })
-  @ApiResponse({ status: 409, description: 'User already in a team in this project' })
+  @ApiResponse({
+    status: 409,
+    description: 'User already in a team in this project',
+  })
   addMember(
     @Param('projectId', ParseProjectIdPipe) projectId: string,
     @Param('teamId', ParseIntPipe) teamId: number,

@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RestructureTeamsProjectScoped1743897600000 implements MigrationInterface {
+export class RestructureTeamsProjectScoped1743897600000
+  implements MigrationInterface
+{
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Create project_members table
     await queryRunner.query(`
@@ -107,9 +109,7 @@ export class RestructureTeamsProjectScoped1743897600000 implements MigrationInte
       `ALTER TABLE teams ADD CONSTRAINT teams_name_key UNIQUE (name)`,
     );
 
-    await queryRunner.query(
-      `ALTER TABLE projects ADD COLUMN team_id INTEGER`,
-    );
+    await queryRunner.query(`ALTER TABLE projects ADD COLUMN team_id INTEGER`);
 
     await queryRunner.query(`ALTER TABLE users ADD COLUMN team_id INTEGER`);
     await queryRunner.query(

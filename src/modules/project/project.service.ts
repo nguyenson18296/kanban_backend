@@ -237,7 +237,10 @@ export class ProjectService {
       });
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
-      this.logger.error('Failed to fetch project members', (error as Error).stack);
+      this.logger.error(
+        'Failed to fetch project members',
+        (error as Error).stack,
+      );
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to fetch project members',
@@ -246,7 +249,10 @@ export class ProjectService {
     }
   }
 
-  async addMembers(projectId: string, userIds: string[]): Promise<ProjectMember[]> {
+  async addMembers(
+    projectId: string,
+    userIds: string[],
+  ): Promise<ProjectMember[]> {
     try {
       await this.ensureProjectExists(projectId);
       await this.validateUsers(userIds);
@@ -260,7 +266,10 @@ export class ProjectService {
 
       if (newIds.length > 0) {
         const members = newIds.map((userId) =>
-          this.memberRepository.create({ project_id: projectId, user_id: userId }),
+          this.memberRepository.create({
+            project_id: projectId,
+            user_id: userId,
+          }),
         );
         await this.memberRepository.save(members);
       }
@@ -268,7 +277,10 @@ export class ProjectService {
       return this.getMembers(projectId);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
-      this.logger.error('Failed to add project members', (error as Error).stack);
+      this.logger.error(
+        'Failed to add project members',
+        (error as Error).stack,
+      );
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to add project members',
@@ -277,7 +289,10 @@ export class ProjectService {
     }
   }
 
-  async removeMembers(projectId: string, userIds: string[]): Promise<ProjectMember[]> {
+  async removeMembers(
+    projectId: string,
+    userIds: string[],
+  ): Promise<ProjectMember[]> {
     try {
       await this.ensureProjectExists(projectId);
 
@@ -301,7 +316,10 @@ export class ProjectService {
       return this.getMembers(projectId);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
-      this.logger.error('Failed to remove project members', (error as Error).stack);
+      this.logger.error(
+        'Failed to remove project members',
+        (error as Error).stack,
+      );
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to remove project members',
