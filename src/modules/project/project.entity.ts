@@ -84,4 +84,10 @@ export class Project {
   @ApiHideProperty()
   @OneToMany(() => ProjectMember, (member) => member.project)
   members: ProjectMember[];
+
+  toJSON() {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { ticket_counter, created_by, ...rest } = this;
+    return rest;
+  }
 }

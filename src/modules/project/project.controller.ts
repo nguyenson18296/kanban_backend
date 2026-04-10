@@ -6,8 +6,19 @@ import {
   Delete,
   Body,
   Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ParseProjectIdPipe } from '../../common/pipes/parse-project-id.pipe';
 import { ProjectService } from './project.service';
 import { Project } from './project.entity';
@@ -21,6 +32,8 @@ export class ProjectController {
   constructor(private readonly projectService: ProjectService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a project' })
   @ApiResponse({
     status: 201,
@@ -28,8 +41,8 @@ export class ProjectController {
     type: Project,
   })
   @ApiResponse({ status: 409, description: 'Project name already exists' })
-  create(@Body() dto: CreateProjectDto) {
-    return this.projectService.create(dto);
+  create(@Body() dto: CreateProjectDto, @CurrentUser('id') userId: string) {
+    return this.projectService.create(dto, userId);
   }
 
   @Get()
@@ -94,26 +107,36 @@ export class ProjectController {
   }
 
   @Post(':id/members')
-  @ApiOperation({ summary: 'Add members to a project' })
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Add members to a project (requires admin+)' })
   @ApiParam({ name: 'id', description: 'Project ID' })
   @ApiResponse({ status: 201, description: 'Members added' })
+  @ApiResponse({ status: 403, description: 'Insufficient project role' })
   @ApiResponse({ status: 404, description: 'Project or user not found' })
   addMembers(
     @Param('id', ParseProjectIdPipe) id: string,
     @Body() dto: ManageProjectMembersDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.projectService.addMembers(id, dto.user_ids);
+    return this.projectService.addMembers(id, dto.user_ids, userId);
   }
 
   @Delete(':id/members')
-  @ApiOperation({ summary: 'Remove members from a project' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove members from a project (requires admin+)' })
   @ApiParam({ name: 'id', description: 'Project ID' })
-  @ApiResponse({ status: 200, description: 'Members removed' })
+  @ApiResponse({ status: 204, description: 'Members removed' })
+  @ApiResponse({ status: 403, description: 'Insufficient project role' })
   @ApiResponse({ status: 404, description: 'Project not found' })
   removeMembers(
     @Param('id', ParseProjectIdPipe) id: string,
     @Body() dto: ManageProjectMembersDto,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.projectService.removeMembers(id, dto.user_ids);
+    return this.projectService.removeMembers(id, dto.user_ids, userId);
   }
 }

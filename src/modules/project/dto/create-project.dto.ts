@@ -1,11 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-  MaxLength,
-} from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateProjectDto {
   @ApiProperty({ example: 'My Kanban Board' })
@@ -18,9 +12,4 @@ export class CreateProjectDto {
   @IsOptional()
   @IsString()
   description?: string;
-
-  @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
-  @IsOptional()
-  @IsUUID()
-  created_by?: string;
 }

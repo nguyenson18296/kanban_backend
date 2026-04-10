@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpStatus,
   Injectable,
   InternalServerErrorException,
@@ -12,8 +13,15 @@ import { Repository } from 'typeorm';
 import { Team } from './team.entity';
 import { TeamMember } from './team-member.entity';
 import { Project } from '../project/project.entity';
-import { ProjectMember } from '../project/project-member.entity';
+import { ProjectMember, ProjectRole } from '../project/project-member.entity';
 import { CreateTeamDto } from './dto/create-team.dto';
+import { ApiListResponse } from '../../common/interfaces/api-response.interface';
+
+const ROLE_HIERARCHY: Record<ProjectRole, number> = {
+  [ProjectRole.OWNER]: 3,
+  [ProjectRole.ADMIN]: 2,
+  [ProjectRole.MEMBER]: 1,
+};
 
 @Injectable()
 export class TeamService {
@@ -30,9 +38,16 @@ export class TeamService {
     private readonly projectMemberRepository: Repository<ProjectMember>,
   ) {}
 
-  async create(projectId: string, dto: CreateTeamDto): Promise<Team> {
+  async create(
+    projectId: string,
+    dto: CreateTeamDto,
+    actorId?: string,
+  ): Promise<Team> {
     try {
       await this.ensureProjectExists(projectId);
+      if (actorId) {
+        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
+      }
 
       const team = this.teamRepository.create({
         ...dto,
@@ -41,7 +56,11 @@ export class TeamService {
       const saved = await this.teamRepository.save(team);
       return this.findOneById(projectId, saved.id);
     } catch (error) {
-      if (error instanceof NotFoundException) throw error;
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      )
+        throw error;
       if (error.code === '23505') {
         throw new ConflictException({
           statusCode: HttpStatus.CONFLICT,
@@ -57,13 +76,14 @@ export class TeamService {
     }
   }
 
-  async findAllByProject(projectId: string): Promise<Team[]> {
+  async findAllByProject(projectId: string): Promise<ApiListResponse<Team>> {
     try {
       await this.ensureProjectExists(projectId);
-      return this.teamRepository.find({
+      const data = await this.teamRepository.find({
         where: { project_id: projectId },
         order: { created_at: 'ASC' },
       });
+      return { data, status: HttpStatus.OK, success: true };
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to fetch teams', (error as Error).stack);
@@ -98,14 +118,18 @@ export class TeamService {
     }
   }
 
-  async getMembers(projectId: string, teamId: number): Promise<TeamMember[]> {
+  async getMembers(
+    projectId: string,
+    teamId: number,
+  ): Promise<ApiListResponse<TeamMember>> {
     try {
       await this.findOneById(projectId, teamId);
-      return this.teamMemberRepository.find({
+      const data = await this.teamMemberRepository.find({
         where: { team_id: teamId, project_id: projectId },
         relations: ['user'],
         order: { joined_at: 'ASC' },
       });
+      return { data, status: HttpStatus.OK, success: true };
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error('Failed to fetch team members', (error as Error).stack);
@@ -121,9 +145,13 @@ export class TeamService {
     projectId: string,
     teamId: number,
     userId: string,
-  ): Promise<TeamMember[]> {
+    actorId?: string,
+  ): Promise<void> {
     try {
       await this.findOneById(projectId, teamId);
+      if (actorId) {
+        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
+      }
 
       const isProjectMember = await this.projectMemberRepository.existsBy({
         project_id: projectId,
@@ -140,9 +168,7 @@ export class TeamService {
         team_id: teamId,
         user_id: userId,
       });
-      if (existing) {
-        return this.getMembers(projectId, teamId);
-      }
+      if (existing) return;
 
       const member = this.teamMemberRepository.create({
         team_id: teamId,
@@ -150,11 +176,11 @@ export class TeamService {
         project_id: projectId,
       });
       await this.teamMemberRepository.save(member);
-      return this.getMembers(projectId, teamId);
     } catch (error) {
       if (
         error instanceof NotFoundException ||
-        error instanceof BadRequestException
+        error instanceof BadRequestException ||
+        error instanceof ForbiddenException
       )
         throw error;
       if (error.code === '23505' && error.constraint?.includes('user_id')) {
@@ -176,21 +202,51 @@ export class TeamService {
     projectId: string,
     teamId: number,
     userId: string,
-  ): Promise<TeamMember[]> {
+    actorId?: string,
+  ): Promise<void> {
     try {
       await this.findOneById(projectId, teamId);
+      if (actorId) {
+        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
+      }
       await this.teamMemberRepository.delete({
         team_id: teamId,
         user_id: userId,
       });
-      return this.getMembers(projectId, teamId);
     } catch (error) {
-      if (error instanceof NotFoundException) throw error;
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      )
+        throw error;
       this.logger.error('Failed to remove team member', (error as Error).stack);
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to remove team member',
         error: (error as Error).message,
+      });
+    }
+  }
+
+  private async ensureProjectRole(
+    projectId: string,
+    userId: string,
+    minimumRole: ProjectRole,
+  ): Promise<void> {
+    const membership = await this.projectMemberRepository.findOneBy({
+      project_id: projectId,
+      user_id: userId,
+    });
+    if (!membership) {
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        message: 'You are not a member of this project',
+      });
+    }
+    if (ROLE_HIERARCHY[membership.role] < ROLE_HIERARCHY[minimumRole]) {
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        message: `This action requires at least ${minimumRole} role`,
       });
     }
   }

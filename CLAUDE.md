@@ -6,16 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Kanban board backend API built with NestJS 11, TypeScript, TypeORM, and PostgreSQL (Supabase).
 
+## Package Manager
+
+This project uses **pnpm**. Do not use `npm` or `yarn`.
+
 ## Commands
 
-- **Dev server:** `npm run start:dev` (watch mode on port 3000)
-- **Build:** `npm run build`
-- **Lint:** `npm run lint` (ESLint with auto-fix)
-- **Format:** `npm run format` (Prettier)
-- **Unit tests:** `npm test`
-- **Single test:** `npx jest --testPathPattern=<pattern>` (e.g. `npx jest --testPathPattern=app.controller`)
-- **E2E tests:** `npm run test:e2e`
-- **Test coverage:** `npm run test:cov`
+- **Install:** `pnpm install`
+- **Dev server:** `pnpm start:dev` (watch mode on port 1996)
+- **Build:** `pnpm build`
+- **Lint:** `pnpm lint` (ESLint with auto-fix)
+- **Format:** `pnpm format` (Prettier)
+- **Unit tests:** `pnpm test`
+- **Single test:** `pnpm exec jest --testPathPattern=<pattern>` (e.g. `pnpm exec jest --testPathPattern=app.controller`)
+- **E2E tests:** `pnpm test:e2e`
+- **Test coverage:** `pnpm test:cov`
 
 ## Architecture
 

@@ -20,6 +20,7 @@ export class TeamMember {
   team_id: number;
 
   @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  @Index('idx_team_members_user_id')
   @PrimaryColumn({ type: 'uuid' })
   user_id: string;
 
