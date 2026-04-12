@@ -25,6 +25,7 @@ import {
   TaskActivityAction,
   TaskActivityEvent,
 } from '../activity/events/activity.events';
+import { ApiListResponse } from '../../common/interfaces/api-response.interface';
 
 @Injectable()
 export class TaskService {
@@ -767,12 +768,7 @@ export class TaskService {
     }
   }
 
-  async findSubtasks(parentId: string): Promise<{
-    data: Task[];
-    status: number;
-    success: boolean;
-    message?: string;
-  }> {
+  async findSubtasks(parentId: string): Promise<ApiListResponse<Task>> {
     try {
       await this.ensureTaskExists(parentId);
       const subtasks = await this.taskRepository.find({

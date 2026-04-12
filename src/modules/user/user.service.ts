@@ -9,6 +9,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
+import { ProjectMember } from '../project/project-member.entity';
+import { ApiListResponse } from '../../common/interfaces/api-response.interface';
 
 @Injectable()
 export class UserService {
@@ -17,11 +19,13 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(ProjectMember)
+    private readonly projectMemberRepository: Repository<ProjectMember>,
   ) {}
 
   async findAll(): Promise<User[]> {
     try {
-      return await this.userRepository.find({ relations: ['team'] });
+      return await this.userRepository.find();
     } catch (error) {
       this.logger.error('Failed to fetch users', (error as Error).stack);
       throw new InternalServerErrorException({
@@ -36,7 +40,6 @@ export class UserService {
     try {
       const user = await this.userRepository.findOne({
         where: { id },
-        relations: ['team'],
       });
       if (!user) {
         throw new NotFoundException({
@@ -103,6 +106,34 @@ export class UserService {
       throw new InternalServerErrorException({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to create user',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async findProjects(userId: string): Promise<ApiListResponse<any>> {
+    try {
+      await this.findOneById(userId);
+      const memberships = await this.projectMemberRepository.find({
+        where: { user_id: userId },
+        relations: ['project', 'project.creator'],
+        order: { joined_at: 'DESC' },
+      });
+      const data = memberships.map((m) => ({
+        ...m.project.toJSON(),
+        role: m.role,
+        joined_at: m.joined_at,
+      }));
+      return { data, status: HttpStatus.OK, success: true };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error(
+        'Failed to fetch user projects',
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to fetch user projects',
         error: (error as Error).message,
       });
     }

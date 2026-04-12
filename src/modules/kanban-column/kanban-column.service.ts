@@ -12,6 +12,7 @@ import { Project } from '../project/project.entity';
 import { KanbanColumn } from './kanban-column.entity';
 import { CreateKanbanColumnDto } from './dto/create-kanban-column.dto';
 import { UpdateKanbanColumnDto } from './dto/update-kanban-column.dto';
+import { ApiListResponse } from '../../common/interfaces/api-response.interface';
 
 @Injectable()
 export class KanbanColumnService {
@@ -56,12 +57,7 @@ export class KanbanColumnService {
     }
   }
 
-  async findAll(): Promise<{
-    data: KanbanColumn[];
-    status: number;
-    success: boolean;
-    message?: string;
-  }> {
+  async findAll(): Promise<ApiListResponse<KanbanColumn>> {
     try {
       const columns = await this.columnRepository.find({
         where: { is_archived: false },

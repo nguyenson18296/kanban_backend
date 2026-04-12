@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   HttpStatus,
   Injectable,
   InternalServerErrorException,
@@ -7,10 +8,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
+import { DataSource, In, Like, Repository } from 'typeorm';
 import { Project } from './project.entity';
+import { ProjectMember, ProjectRole } from './project-member.entity';
+import { User } from '../user/user.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { ApiListResponse } from '../../common/interfaces/api-response.interface';
+
+const ROLE_HIERARCHY: Record<ProjectRole, number> = {
+  [ProjectRole.OWNER]: 3,
+  [ProjectRole.ADMIN]: 2,
+  [ProjectRole.MEMBER]: 1,
+};
 
 @Injectable()
 export class ProjectService {
@@ -19,6 +29,11 @@ export class ProjectService {
   constructor(
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+    @InjectRepository(ProjectMember)
+    private readonly memberRepository: Repository<ProjectMember>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
 
   private static readonly MAX_ID_RETRIES = 3;
@@ -60,14 +75,34 @@ export class ProjectService {
     });
   }
 
-  async create(dto: CreateProjectDto): Promise<Project> {
+  async create(dto: CreateProjectDto, actorId?: string): Promise<Project> {
     const baseTag = this.generateBaseTag(dto.name);
     let tag = await this.resolveUniqueTag(baseTag);
 
     for (let attempt = 0; attempt <= ProjectService.MAX_ID_RETRIES; attempt++) {
       try {
-        const project = this.projectRepository.create({ ...dto, tag });
-        return await this.projectRepository.save(project);
+        const saved = await this.dataSource.transaction(async (manager) => {
+          const project = manager.create(Project, {
+            ...dto,
+            tag,
+            created_by: actorId ?? undefined,
+          });
+          const savedProject = await manager.save(project);
+
+          // Auto-add creator as project owner
+          if (actorId) {
+            const ownerMember = manager.create(ProjectMember, {
+              project_id: savedProject.id,
+              user_id: actorId,
+              role: ProjectRole.OWNER,
+            });
+            await manager.save(ownerMember);
+          }
+
+          return savedProject;
+        });
+
+        return this.findOneById(saved.id);
       } catch (error) {
         if (error.code === '23505') {
           const isPkCollision =
@@ -126,6 +161,7 @@ export class ProjectService {
   async findAll(): Promise<Project[]> {
     try {
       return await this.projectRepository.find({
+        relations: ['creator'],
         order: { created_at: 'DESC' },
       });
     } catch (error) {
@@ -140,7 +176,10 @@ export class ProjectService {
 
   async findOneById(id: string): Promise<Project> {
     try {
-      const project = await this.projectRepository.findOneBy({ id });
+      const project = await this.projectRepository.findOne({
+        where: { id },
+        relations: ['creator'],
+      });
       if (!project) {
         throw new NotFoundException({
           statusCode: HttpStatus.NOT_FOUND,
@@ -163,7 +202,8 @@ export class ProjectService {
     try {
       const project = await this.findOneById(id);
       Object.assign(project, dto);
-      return await this.projectRepository.save(project);
+      await this.projectRepository.save(project);
+      return this.findOneById(id);
     } catch (error) {
       if (
         error instanceof NotFoundException ||
@@ -209,6 +249,167 @@ export class ProjectService {
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to delete project',
         error: (error as Error).message,
+      });
+    }
+  }
+
+  // --- Project Member Management ---
+
+  async getMembers(projectId: string): Promise<ApiListResponse<ProjectMember>> {
+    try {
+      await this.ensureProjectExists(projectId);
+      const data = await this.memberRepository.find({
+        where: { project_id: projectId },
+        relations: ['user'],
+        order: { joined_at: 'ASC' },
+      });
+      return { data, status: HttpStatus.OK, success: true };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error(
+        'Failed to fetch project members',
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to fetch project members',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async addMembers(
+    projectId: string,
+    userIds: string[],
+    actorId?: string,
+  ): Promise<void> {
+    try {
+      await this.ensureProjectExists(projectId);
+      if (actorId) {
+        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
+      }
+      await this.validateUsers(userIds);
+
+      const existing = await this.memberRepository.findBy({
+        project_id: projectId,
+        user_id: In(userIds),
+      });
+      const existingIds = new Set(existing.map((m) => m.user_id));
+      const newIds = userIds.filter((id) => !existingIds.has(id));
+
+      if (newIds.length > 0) {
+        const members = newIds.map((userId) =>
+          this.memberRepository.create({
+            project_id: projectId,
+            user_id: userId,
+          }),
+        );
+        await this.memberRepository.save(members);
+      }
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      )
+        throw error;
+      this.logger.error(
+        'Failed to add project members',
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to add project members',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async removeMembers(
+    projectId: string,
+    userIds: string[],
+    actorId?: string,
+  ): Promise<void> {
+    try {
+      await this.ensureProjectExists(projectId);
+      if (actorId) {
+        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
+      }
+
+      // Remove from team_members first (user leaving project should leave their team too)
+      await this.memberRepository
+        .createQueryBuilder()
+        .delete()
+        .from('team_members')
+        .where('project_id = :projectId AND user_id IN (:...userIds)', {
+          projectId,
+          userIds,
+        })
+        .execute();
+
+      // Remove from project_members
+      await this.memberRepository.delete({
+        project_id: projectId,
+        user_id: In(userIds),
+      });
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      )
+        throw error;
+      this.logger.error(
+        'Failed to remove project members',
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException({
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to remove project members',
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  async ensureProjectRole(
+    projectId: string,
+    userId: string,
+    minimumRole: ProjectRole,
+  ): Promise<void> {
+    const membership = await this.memberRepository.findOneBy({
+      project_id: projectId,
+      user_id: userId,
+    });
+    if (!membership) {
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        message: 'You are not a member of this project',
+      });
+    }
+    if (ROLE_HIERARCHY[membership.role] < ROLE_HIERARCHY[minimumRole]) {
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        message: `This action requires at least ${minimumRole} role`,
+      });
+    }
+  }
+
+  private async ensureProjectExists(id: string): Promise<void> {
+    const exists = await this.projectRepository.existsBy({ id });
+    if (!exists) {
+      throw new NotFoundException({
+        statusCode: HttpStatus.NOT_FOUND,
+        message: `Project with id "${id}" not found`,
+      });
+    }
+  }
+
+  private async validateUsers(userIds: string[]): Promise<void> {
+    const users = await this.userRepository.findBy({ id: In(userIds) });
+    if (users.length !== userIds.length) {
+      const foundIds = new Set(users.map((u) => u.id));
+      const missing = userIds.filter((id) => !foundIds.has(id));
+      throw new NotFoundException({
+        statusCode: HttpStatus.NOT_FOUND,
+        message: `Users not found: ${missing.join(', ')}`,
       });
     }
   }

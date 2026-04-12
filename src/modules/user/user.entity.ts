@@ -6,10 +6,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { Team } from '../team/team.entity';
 
 export enum UserRole {
   BACKEND_DEVELOPER = 'backend_developer',
@@ -44,16 +41,6 @@ export class User {
   @Index('idx_users_role')
   @Column({ type: 'enum', enum: UserRole, default: UserRole.BACKEND_DEVELOPER })
   role: UserRole;
-
-  @ApiProperty({ example: 1, nullable: true })
-  @Index('idx_users_team_id')
-  @Column({ type: 'int', nullable: true })
-  team_id: number;
-
-  @ApiHideProperty()
-  @ManyToOne(() => Team, (team) => team.members, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'team_id' })
-  team: Team;
 
   @ApiProperty({
     example: 'https://api.dicebear.com/9.x/initials/svg?seed=JD',
