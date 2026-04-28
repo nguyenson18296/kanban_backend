@@ -32,7 +32,7 @@ The existing `NotificationListener` continues to persist notifications to the DB
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `notification:new` | `{ id, type, actorId, payload, createdAt }` | New notification for the user |
+| `notification:new` | `{ type, actorId, entityType, entityId, payload, createdAt }` | New notification for the user (lightweight push; `createdAt` is emit-time, not DB-persisted; no `id` since this fires before DB persistence — client can fetch the full notification via REST if needed) |
 | `connection:established` | `{ userId }` | Confirms successful auth |
 | `connection:error` | `{ message }` | Auth failure, followed by disconnect |
 | `token:refresh:success` | `{}` | Token refresh accepted |
