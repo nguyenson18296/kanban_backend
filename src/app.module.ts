@@ -16,6 +16,7 @@ import { CommentModule } from './modules/comment/comment.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { EventsModule } from './modules/events/events.module';
+import { PresenceModule } from './modules/presence/presence.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { EventsModule } from './modules/events/events.module';
     NotificationModule,
     ActivityModule,
     EventsModule,
+    PresenceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

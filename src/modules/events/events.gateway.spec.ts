@@ -8,6 +8,8 @@ import {
   CommentCreatedEvent,
   TaskAssignedEvent,
 } from '../notification/events/notification.events';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PRESENCE_EVENTS } from '../presence/events/presence.events';
 
 describe('EventsGateway', () => {
   let gateway: EventsGateway;
@@ -20,11 +22,16 @@ describe('EventsGateway', () => {
     validateToken: jest.fn().mockResolvedValue(mockUser),
   };
 
+  const mockEventEmitter = {
+    emit: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EventsGateway,
         { provide: WsJwtGuard, useValue: mockWsJwtGuard },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     })
       .overrideGuard(WsJwtGuard)
@@ -86,6 +93,44 @@ describe('EventsGateway', () => {
       expect(client.disconnect).toHaveBeenCalledWith(true);
       expect(client.join).not.toHaveBeenCalled();
     });
+
+    it('should emit ws.connection.opened after successful auth', async () => {
+      const client = {
+        id: 'socket-1',
+        data: {},
+        join: jest.fn().mockResolvedValue(undefined),
+        emit: jest.fn(),
+        disconnect: jest.fn(),
+        handshake: { auth: { token: 'valid-token' } },
+      } as unknown as Socket;
+
+      await gateway.handleConnection(client);
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        PRESENCE_EVENTS.WS_CONNECTION_OPENED,
+        { userId: 'user-1', socketId: 'socket-1' },
+      );
+    });
+
+    it('should NOT emit ws.connection.opened on auth failure', async () => {
+      mockWsJwtGuard.validateToken.mockRejectedValueOnce(new Error('Invalid'));
+
+      const client = {
+        id: 'socket-2',
+        data: {},
+        join: jest.fn(),
+        emit: jest.fn(),
+        disconnect: jest.fn(),
+        handshake: { auth: { token: 'bad-token' } },
+      } as unknown as Socket;
+
+      await gateway.handleConnection(client);
+
+      expect(mockEventEmitter.emit).not.toHaveBeenCalledWith(
+        PRESENCE_EVENTS.WS_CONNECTION_OPENED,
+        expect.anything(),
+      );
+    });
   });
 
   describe('handleDisconnect', () => {
@@ -107,6 +152,34 @@ describe('EventsGateway', () => {
 
       // Should not throw
       gateway.handleDisconnect(client);
+    });
+
+    it('should emit ws.connection.closed when user is known', () => {
+      const client = {
+        id: 'socket-1',
+        data: { user: mockUser },
+      } as unknown as Socket;
+
+      gateway.handleDisconnect(client);
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        PRESENCE_EVENTS.WS_CONNECTION_CLOSED,
+        { userId: 'user-1', socketId: 'socket-1' },
+      );
+    });
+
+    it('should NOT emit ws.connection.closed when user is unknown', () => {
+      const client = {
+        id: 'socket-1',
+        data: {},
+      } as unknown as Socket;
+
+      gateway.handleDisconnect(client);
+
+      expect(mockEventEmitter.emit).not.toHaveBeenCalledWith(
+        PRESENCE_EVENTS.WS_CONNECTION_CLOSED,
+        expect.anything(),
+      );
     });
   });
 
