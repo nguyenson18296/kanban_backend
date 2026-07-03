@@ -11,6 +11,8 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from './guards/ws-jwt.guard';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PRESENCE_EVENTS } from '../presence/events/presence.events';
 
 @WebSocketGateway({
   cors: {
@@ -23,9 +25,12 @@ export class EventsGateway
   private readonly logger = new Logger(EventsGateway.name);
 
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
-  constructor(private readonly wsJwtGuard: WsJwtGuard) {}
+  constructor(
+    private readonly wsJwtGuard: WsJwtGuard,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   afterInit(): void {
     this.logger.log('WebSocket gateway initialized');
@@ -39,6 +44,10 @@ export class EventsGateway
       await client.join(`user:${userId}`);
       client.emit('connection:established', { userId });
       this.logger.log(`Client connected: ${client.id} (user: ${userId})`);
+      this.eventEmitter.emit(PRESENCE_EVENTS.WS_CONNECTION_OPENED, {
+        userId,
+        socketId: client.id,
+      });
     } catch {
       client.emit('connection:error', { message: 'Authentication failed' });
       client.disconnect(true);
@@ -46,8 +55,17 @@ export class EventsGateway
   }
 
   handleDisconnect(client: Socket): void {
-    const userId = client.data?.user?.id ?? 'unknown';
-    this.logger.log(`Client disconnected: ${client.id} (user: ${userId})`);
+    const user = client.data?.user;
+    const userId = user?.id;
+    this.logger.log(
+      `Client disconnected: ${client.id} (user: ${userId ?? 'unknown'})`,
+    );
+    if (userId) {
+      this.eventEmitter.emit(PRESENCE_EVENTS.WS_CONNECTION_CLOSED, {
+        userId,
+        socketId: client.id,
+      });
+    }
   }
 
   @SubscribeMessage('token:refresh')
