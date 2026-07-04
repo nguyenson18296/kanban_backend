@@ -11,6 +11,7 @@ import { Activity } from './activity.entity';
 import { Task } from '../task/task.entity';
 import { TaskActivityAction } from './events/activity.events';
 import { ActivityQueryDto } from './dto/activity-query.dto';
+import { PaginatedResponse } from '../../common/interfaces/pagination.interface';
 
 @Injectable()
 export class ActivityService {
@@ -41,10 +42,7 @@ export class ActivityService {
   async findByTask(
     taskId: string,
     query: ActivityQueryDto,
-  ): Promise<{
-    data: Activity[];
-    meta: { page: number; limit: number; total: number; totalPages: number };
-  }> {
+  ): Promise<PaginatedResponse<Activity>> {
     try {
       const exists = await this.taskRepository.existsBy({ id: taskId });
       if (!exists) {

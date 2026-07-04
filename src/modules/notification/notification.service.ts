@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Notification, NotificationType } from './notification.entity';
 import { NotificationQueryDto } from './dto/notification-query.dto';
+import { PaginatedResponse } from '../../common/interfaces/pagination.interface';
 
 @Injectable()
 export class NotificationService {
@@ -55,10 +56,7 @@ export class NotificationService {
   async findByRecipient(
     recipientId: string,
     query: NotificationQueryDto,
-  ): Promise<{
-    data: Notification[];
-    meta: { page: number; limit: number; total: number; totalPages: number };
-  }> {
+  ): Promise<PaginatedResponse<Notification>> {
     try {
       const page = query.page ?? 1;
       const limit = query.limit ?? 20;

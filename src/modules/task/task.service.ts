@@ -18,6 +18,7 @@ import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import {
   NOTIFICATION_EVENTS,
+  TaskAssignedEvent,
   TaskUpdatedEvent,
 } from '../notification/events/notification.events';
 import {
@@ -26,6 +27,9 @@ import {
   TaskActivityEvent,
 } from '../activity/events/activity.events';
 import { ApiListResponse } from '../../common/interfaces/api-response.interface';
+import { SubscriptionService } from '../subscription/subscription.service';
+import { SubscriptionSource } from '../subscription/task-subscription.entity';
+import { MentionService } from '../mention/mention.service';
 
 @Injectable()
 export class TaskService {
@@ -42,6 +46,8 @@ export class TaskService {
     private readonly columnRepository: Repository<KanbanColumn>,
     private readonly dataSource: DataSource,
     private readonly eventEmitter: EventEmitter2,
+    private readonly subscriptionService: SubscriptionService,
+    private readonly mentionService: MentionService,
   ) {}
 
   private async ensureTaskExists(id: string): Promise<void> {
@@ -77,6 +83,40 @@ export class TaskService {
       const saved = await this.taskRepository.save(task);
 
       const result = await this.findOneById(saved.id);
+
+      // KAN-78: subscriptions + assignment notification on create.
+      if (actorId) {
+        await this.subscriptionService.subscribe(
+          saved.id,
+          actorId,
+          SubscriptionSource.CREATED,
+        );
+      }
+      if (assignee_ids?.length) {
+        await this.subscriptionService.subscribeMany(
+          saved.id,
+          assignee_ids,
+          SubscriptionSource.ASSIGNED,
+        );
+        if (actorId) {
+          this.eventEmitter.emit(
+            NOTIFICATION_EVENTS.TASK_ASSIGNED,
+            new TaskAssignedEvent(actorId, saved.id, assignee_ids, {
+              task_id: saved.id,
+              task_title: result.title,
+              ticket_id: result.ticket_id,
+            }),
+          );
+        }
+      }
+      if (taskData.description) {
+        await this.subscribeDescriptionMentions(
+          saved.id,
+          taskData.description,
+          actorId ? [actorId] : [],
+        );
+      }
+
       if (actorId) {
         this.eventEmitter.emit(
           ACTIVITY_EVENTS.TASK_CREATED,
@@ -199,7 +239,6 @@ export class TaskService {
       const task = await this.findOneById(id);
       const { assignee_ids, label_ids, ...taskData } = dto;
       const previousStatus = task.status;
-      const originalCreatedBy = task.created_by;
       const previousTitle = task.title;
       const previousDescription = task.description;
       const previousPriority = task.priority;
@@ -247,24 +286,64 @@ export class TaskService {
       await this.taskRepository.save(task);
       const updated = await this.findOneById(id);
 
-      // Notify task creator when status changes
-      if (
-        actorId &&
-        taskData.status !== undefined &&
-        taskData.status !== previousStatus &&
-        originalCreatedBy
-      ) {
-        this.eventEmitter.emit(
-          NOTIFICATION_EVENTS.TASK_UPDATED,
-          new TaskUpdatedEvent(actorId, task.id, [originalCreatedBy], {
-            task_id: task.id,
-            task_title: task.title,
-            ticket_id: task.ticket_id,
-            changes: {
-              status: { from: previousStatus, to: taskData.status },
-            },
-          }),
-        );
+      // KAN-78: auto-subscribe newly-added assignees and description mentions,
+      // then fan out a status change to all subscribers (minus the actor).
+      if (actorId) {
+        if (newAssignees !== undefined) {
+          const addedIds = newAssignees
+            .filter((u) => !previousAssigneeIds.has(u.id))
+            .map((u) => u.id);
+          if (addedIds.length > 0) {
+            await this.subscriptionService.subscribeMany(
+              task.id,
+              addedIds,
+              SubscriptionSource.ASSIGNED,
+            );
+            this.eventEmitter.emit(
+              NOTIFICATION_EVENTS.TASK_ASSIGNED,
+              new TaskAssignedEvent(actorId, task.id, addedIds, {
+                task_id: task.id,
+                task_title: updated.title,
+                ticket_id: updated.ticket_id,
+              }),
+            );
+          }
+        }
+
+        if (
+          taskData.description !== undefined &&
+          taskData.description !== previousDescription &&
+          taskData.description
+        ) {
+          await this.subscribeDescriptionMentions(
+            task.id,
+            taskData.description,
+            [actorId],
+          );
+        }
+
+        if (
+          taskData.status !== undefined &&
+          taskData.status !== previousStatus
+        ) {
+          const subscriberIds = await this.subscriptionService.getSubscriberIds(
+            task.id,
+          );
+          const recipients = subscriberIds.filter((id) => id !== actorId);
+          if (recipients.length > 0) {
+            this.eventEmitter.emit(
+              NOTIFICATION_EVENTS.TASK_UPDATED,
+              new TaskUpdatedEvent(actorId, task.id, recipients, {
+                task_id: task.id,
+                task_title: updated.title,
+                ticket_id: updated.ticket_id,
+                changes: {
+                  status: { from: previousStatus, to: taskData.status },
+                },
+              }),
+            );
+          }
+        }
       }
 
       // Emit activity events for changed fields
@@ -479,6 +558,27 @@ export class TaskService {
       task.assignees = [...task.assignees, ...newUsers];
       await this.taskRepository.save(task);
       const result = await this.findOneById(taskId);
+
+      // KAN-78: auto-subscribe newly-added assignees and notify them.
+      if (newUsers.length > 0) {
+        const newIds = newUsers.map((u) => u.id);
+        await this.subscriptionService.subscribeMany(
+          taskId,
+          newIds,
+          SubscriptionSource.ASSIGNED,
+        );
+        if (actorId) {
+          this.eventEmitter.emit(
+            NOTIFICATION_EVENTS.TASK_ASSIGNED,
+            new TaskAssignedEvent(actorId, taskId, newIds, {
+              task_id: taskId,
+              task_title: result.title,
+              ticket_id: result.ticket_id,
+            }),
+          );
+        }
+      }
+
       if (actorId && newUsers.length > 0) {
         this.eventEmitter.emit(
           ACTIVITY_EVENTS.TASK_ASSIGNEE_ADDED,
@@ -789,6 +889,37 @@ export class TaskService {
         message: 'Failed to fetch subtasks',
         error: (error as Error).message,
       });
+    }
+  }
+
+  /**
+   * Best-effort: resolve @mentions in a task description and auto-subscribe
+   * them. Runs after the task is persisted, so a mention-lookup failure must
+   * never fail the request — log and swallow. No notification is emitted for
+   * description mentions (subscription only), so nothing else depends on it.
+   */
+  private async subscribeDescriptionMentions(
+    taskId: string,
+    description: string,
+    excludeIds: string[],
+  ): Promise<void> {
+    try {
+      const mentionedIds = await this.mentionService.resolveMentionedUserIds(
+        description,
+        excludeIds,
+      );
+      if (mentionedIds.length > 0) {
+        await this.subscriptionService.subscribeMany(
+          taskId,
+          mentionedIds,
+          SubscriptionSource.MENTIONED,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to resolve or subscribe description mentions for task ${taskId}`,
+        (error as Error).stack,
+      );
     }
   }
 

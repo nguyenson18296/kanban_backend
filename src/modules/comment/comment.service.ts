@@ -11,15 +11,18 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
 import { Comment } from './comment.entity';
 import { Task } from '../task/task.entity';
-import { User } from '../user/user.entity';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { CommentQueryDto } from './dto/comment-query.dto';
+import { PaginatedResponse } from '../../common/interfaces/pagination.interface';
 import {
   NOTIFICATION_EVENTS,
   CommentCreatedEvent,
   CommentMentionedEvent,
 } from '../notification/events/notification.events';
+import { SubscriptionService } from '../subscription/subscription.service';
+import { SubscriptionSource } from '../subscription/task-subscription.entity';
+import { MentionService } from '../mention/mention.service';
 
 @Injectable()
 export class CommentService {
@@ -30,9 +33,9 @@ export class CommentService {
     private readonly commentRepository: Repository<Comment>,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
     private readonly eventEmitter: EventEmitter2,
+    private readonly subscriptionService: SubscriptionService,
+    private readonly mentionService: MentionService,
   ) {}
 
   async create(
@@ -61,12 +64,53 @@ export class CommentService {
       const saved = await this.commentRepository.save(comment);
       const result = await this.findOneById(saved.id);
 
-      // Notify the task creator that someone commented on their task
       const preview = dto.content.replace(/<[^>]*>/g, '').slice(0, 120);
-      if (task.created_by) {
+
+      // KAN-78: the commenter is auto-subscribed to the task.
+      await this.subscriptionService.subscribe(
+        taskId,
+        authorId,
+        SubscriptionSource.COMMENTED,
+      );
+
+      // Resolve @mentioned users (exclude only the author — a mentioned task
+      // creator should still get a mention notification). Mentioned users are
+      // auto-subscribed for future task activity. This runs AFTER the comment
+      // is persisted, so mention lookup must never fail the request: on error,
+      // fall back to no mentions and still return the created comment.
+      let mentionedUserIds: string[] = [];
+      try {
+        mentionedUserIds = await this.mentionService.resolveMentionedUserIds(
+          dto.content,
+          [authorId],
+        );
+        if (mentionedUserIds.length > 0) {
+          await this.subscriptionService.subscribeMany(
+            taskId,
+            mentionedUserIds,
+            SubscriptionSource.MENTIONED,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to resolve or subscribe mentions for task ${taskId}`,
+          (error as Error).stack,
+        );
+        mentionedUserIds = [];
+      }
+
+      // Fan out COMMENT_CREATED to subscribers, minus the author and anyone
+      // already receiving a COMMENT_MENTIONED for this comment (dedupe).
+      const subscriberIds =
+        await this.subscriptionService.getSubscriberIds(taskId);
+      const mentionedSet = new Set(mentionedUserIds);
+      const commentRecipients = subscriberIds.filter(
+        (id) => id !== authorId && !mentionedSet.has(id),
+      );
+      if (commentRecipients.length > 0) {
         this.eventEmitter.emit(
           NOTIFICATION_EVENTS.COMMENT_CREATED,
-          new CommentCreatedEvent(authorId, taskId, task.created_by, {
+          new CommentCreatedEvent(authorId, taskId, commentRecipients, {
             task_id: taskId,
             task_title: task.title,
             ticket_id: task.ticket_id,
@@ -81,30 +125,17 @@ export class CommentService {
         );
       }
 
-      // Notify @mentioned users (excluding the author and the task creator
-      // who already receives a comment_created notification)
-      const mentions = this.parseMentions(dto.content);
-      if (mentions.ids.length > 0 || mentions.names.length > 0) {
-        const excludeIds = [authorId];
-        if (task.created_by) excludeIds.push(task.created_by);
-
-        const mentionedUserIds = await this.resolveMentionedUsers(
-          mentions,
-          excludeIds,
+      if (mentionedUserIds.length > 0) {
+        this.eventEmitter.emit(
+          NOTIFICATION_EVENTS.COMMENT_MENTIONED,
+          new CommentMentionedEvent(authorId, saved.id, mentionedUserIds, {
+            task_id: taskId,
+            task_title: task.title,
+            ticket_id: task.ticket_id,
+            comment_id: saved.id,
+            comment_preview: preview,
+          }),
         );
-
-        if (mentionedUserIds.length > 0) {
-          this.eventEmitter.emit(
-            NOTIFICATION_EVENTS.COMMENT_MENTIONED,
-            new CommentMentionedEvent(authorId, saved.id, mentionedUserIds, {
-              task_id: taskId,
-              task_title: task.title,
-              ticket_id: task.ticket_id,
-              comment_id: saved.id,
-              comment_preview: preview,
-            }),
-          );
-        }
       }
 
       return result;
@@ -122,10 +153,7 @@ export class CommentService {
   async findByTask(
     taskId: string,
     query: CommentQueryDto,
-  ): Promise<{
-    data: Comment[];
-    meta: { page: number; limit: number; total: number; totalPages: number };
-  }> {
+  ): Promise<PaginatedResponse<Comment>> {
     try {
       await this.ensureTaskExists(taskId);
 
@@ -241,86 +269,5 @@ export class CommentService {
         message: 'You can only modify your own comments',
       });
     }
-  }
-
-  /**
-   * Extract @mentioned users from HTML content.
-   * Returns { ids, names } — UUIDs from data-mention-id (preferred),
-   * full_names from data-mention or plain @Name as fallback.
-   */
-  private parseMentions(html: string): { ids: string[]; names: string[] } {
-    const ids = new Set<string>();
-    const names = new Set<string>();
-    let match: RegExpExecArray | null;
-
-    // Prefer data-mention-id (UUID) when available
-    const idRegex = /data-mention-id="([^"]+)"/g;
-
-    // Collect all mention-id UUIDs
-    while ((match = idRegex.exec(html)) !== null) {
-      ids.add(match[1].trim());
-    }
-
-    // Collect data-mention names only for tags WITHOUT a data-mention-id
-    // Re-parse each mention span to check if it has an id sibling
-    const spanRegex = /<span[^>]*data-mention="([^"]+)"[^>]*>/g;
-    while ((match = spanRegex.exec(html)) !== null) {
-      const spanTag = match[0];
-      if (!spanTag.includes('data-mention-id')) {
-        names.add(match[1].trim());
-      }
-    }
-
-    // Fallback: plain @Name patterns from text content (no rich text editor)
-    const plainText = html.replaceAll(/<[^>]*>/g, ' ');
-    const plainMentionRegex = /@([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)+)/g;
-    while ((match = plainMentionRegex.exec(plainText)) !== null) {
-      names.add(match[1].trim());
-    }
-
-    return { ids: [...ids], names: [...names] };
-  }
-
-  /**
-   * Resolve mentioned users to IDs, excluding specific user IDs
-   * (e.g., the comment author and the task creator who already gets notified).
-   * Accepts both direct UUIDs and full_names to resolve.
-   */
-  private async resolveMentionedUsers(
-    mentions: { ids: string[]; names: string[] },
-    excludeIds: string[],
-  ): Promise<string[]> {
-    const resolvedIds = new Set<string>();
-    const excludeSet = new Set(excludeIds);
-
-    // Direct UUIDs — verify they exist and are active
-    if (mentions.ids.length > 0) {
-      const usersById = await this.userRepository
-        .createQueryBuilder('user')
-        .select('user.id')
-        .where('user.id IN (:...ids)', { ids: mentions.ids })
-        .andWhere('user.is_active = true')
-        .getMany();
-
-      for (const u of usersById) {
-        if (!excludeSet.has(u.id)) resolvedIds.add(u.id);
-      }
-    }
-
-    // Name-based fallback — resolve full_name to ID
-    if (mentions.names.length > 0) {
-      const usersByName = await this.userRepository
-        .createQueryBuilder('user')
-        .select('user.id')
-        .where('user.full_name IN (:...names)', { names: mentions.names })
-        .andWhere('user.is_active = true')
-        .getMany();
-
-      for (const u of usersByName) {
-        if (!excludeSet.has(u.id)) resolvedIds.add(u.id);
-      }
-    }
-
-    return [...resolvedIds];
   }
 }

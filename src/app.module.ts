@@ -17,6 +17,8 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { EventsModule } from './modules/events/events.module';
 import { PresenceModule } from './modules/presence/presence.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { MentionModule } from './modules/mention/mention.module';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { PresenceModule } from './modules/presence/presence.module';
     ActivityModule,
     EventsModule,
     PresenceModule,
+    SubscriptionModule,
+    MentionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
