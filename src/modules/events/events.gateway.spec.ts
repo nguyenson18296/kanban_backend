@@ -304,7 +304,7 @@ describe('EventsService', () => {
       const event = new CommentCreatedEvent(
         'actor-1',
         'entity-1',
-        'recipient-1',
+        ['recipient-1'],
         {
           task_id: 'task-1',
           task_title: 'Test Task',
@@ -331,7 +331,7 @@ describe('EventsService', () => {
       const event = new CommentCreatedEvent(
         'actor-1',
         'entity-1',
-        'actor-1', // same as actor
+        ['actor-1'], // same as actor
         {
           task_id: 'task-1',
           task_title: 'Test Task',

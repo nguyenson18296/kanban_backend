@@ -17,10 +17,7 @@ export class EventsService {
 
   @OnEvent(NOTIFICATION_EVENTS.COMMENT_CREATED, { async: true })
   handleCommentCreated(event: CommentCreatedEvent): void {
-    // Single recipient — skip if self-notification
-    if (event.recipient_id === event.actor_id) return;
-
-    this.emitNotification(event.recipient_id, {
+    this.emitToRecipients(event.recipient_ids, event.actor_id, {
       type: 'comment_created',
       actorId: event.actor_id,
       entityType: event.entity_type,

@@ -17,7 +17,7 @@ export class CommentCreatedEvent implements BaseNotificationEvent {
   constructor(
     public readonly actor_id: string,
     public readonly entity_id: string,
-    public readonly recipient_id: string,
+    public readonly recipient_ids: string[],
     public readonly payload: {
       task_id: string;
       task_title: string;

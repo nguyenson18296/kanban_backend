@@ -6,9 +6,15 @@ import { Label } from '../label/label.entity';
 import { KanbanColumn } from '../kanban-column/kanban-column.entity';
 import { TaskService } from './task.service';
 import { TaskController } from './task.controller';
+import { SubscriptionModule } from '../subscription/subscription.module';
+import { MentionModule } from '../mention/mention.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Task, User, Label, KanbanColumn])],
+  imports: [
+    TypeOrmModule.forFeature([Task, User, Label, KanbanColumn]),
+    SubscriptionModule,
+    MentionModule,
+  ],
   controllers: [TaskController],
   providers: [TaskService],
   exports: [TaskService],

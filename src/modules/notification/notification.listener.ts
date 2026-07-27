@@ -19,14 +19,15 @@ export class NotificationListener {
   @OnEvent(NOTIFICATION_EVENTS.COMMENT_CREATED)
   async handleCommentCreated(event: CommentCreatedEvent): Promise<void> {
     try {
-      await this.notificationService.create({
-        type: NotificationType.COMMENT_CREATED,
-        recipient_id: event.recipient_id,
+      const notifications = event.recipient_ids.map((recipientId) => ({
+        type: NotificationType.COMMENT_CREATED as NotificationType,
+        recipient_id: recipientId,
         actor_id: event.actor_id,
         entity_type: event.entity_type,
         entity_id: event.entity_id,
         payload: event.payload,
-      });
+      }));
+      await this.notificationService.createBatch(notifications);
     } catch (error) {
       this.logger.error(
         'Failed to handle comment.created event',

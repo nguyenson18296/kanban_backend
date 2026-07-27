@@ -37,3 +37,51 @@ This project uses **pnpm**. Do not use `npm` or `yarn`.
 - `@typescript-eslint/no-explicit-any` is disabled
 - Single quotes, trailing commas (`all`)
 - Target: ES2023, module: nodenext
+
+## API Conventions
+
+- **Prefix & docs:** Global `/api` prefix (`main.ts`); no URL versioning. Swagger UI at `/api/docs`, mounted only when `NODE_ENV !== 'production'`.
+- **Routing:** Controllers are plural-noun, kebab-case (`@Controller('tasks')`); multi-word segments/actions use kebab-case (`unread-count`, `by-ticket/:ticketId`, `me/projects`). Nest child resources under a parent path (`projects/:projectId/teams`, `tasks/:taskId/comments`) and model relationship changes as sub-resource `POST`/`DELETE` (`:id/assignees`, `:id/labels`, `:id/members`). (`board` is the one legacy singular controller — don't copy it.)
+- **Validation:** Every request field lives on a class-validator DTO. The global `ValidationPipe` (`whitelist` + `forbidNonWhitelisted` + `transform`, `main.ts`) is the only validation gate — never validate manually in controllers/services. Coerce query params explicitly with `@Type(() => Number)` (transform doesn't infer primitives from query strings).
+- **Path params:** UUID ids → `ParseUUIDPipe`; integer ids (label, kanban-column, team) → `ParseIntPipe`; project ids → `ParseProjectIdPipe` (`src/common/pipes`).
+- **Swagger:** Decorate every controller (`@ApiTags`), every route (`@ApiOperation` + `@ApiResponse`; `@ApiParam` for path params; `@ApiBearerAuth` on guarded routes), and every DTO field (`@ApiProperty`/`@ApiPropertyOptional`).
+- **Status codes:** Use Nest's method default; add `@HttpCode` only to deviate (login `POST` → 200; `DELETE` with no body → `@HttpCode(HttpStatus.NO_CONTENT)`). Apply the DELETE rule uniformly — some current DELETEs are 204, others default to 200.
+- **Pagination:** Offset-based — `page` (1-based, default 1) + `limit` (default 20, max 100). No cursor pagination.
+
+## Wire Format
+
+- **snake_case everywhere on the wire:** JSON request/response fields, DTO properties, and TypeORM `@Column` names are all snake_case (`full_name`, `access_token`, `column_id`, `due_date`, `ticket_id`). Do not introduce camelCase request/response fields. (Known camelCase surfaces: WebSocket event DTOs in `src/modules/events/dto` and `board-query.dto.ts` — don't extend them.)
+
+## Responses & Error Handling
+
+- **No global response envelope** (no response interceptor). Three shapes coexist — match the module you're editing: list endpoints often use `ApiListResponse<T>` = `{ data, status, success, message? }`; single-entity/board endpoints return the raw entity/DTO; paginated comments use `{ data, meta: { page, limit, total, totalPages } }` — reuse that exact shape for new paginated lists.
+- **Throw, don't catch in controllers.** Services throw Nest exceptions; controllers never try/catch. Mapping: `NotFoundException` 404, `ForbiddenException` 403 (ownership/role), `ConflictException` 409, `BadRequestException` 400, `UnauthorizedException` 401.
+- **Never leak internals to clients:** do not put `error: (error as Error).message` in a response body — it exposes SQL/constraint text. Log with `this.logger.error(...)` and throw a generic message. Much existing code leaks — don't copy it.
+- If a service keeps a try/catch that re-throws, guard on `error instanceof HttpException` (not a hand-listed set of subclasses) so a new throw isn't downgraded to 500. Put cross-cutting error/response shaping in an `APP_FILTER`/interceptor, not per-controller.
+
+## Authentication & Authorization
+
+- **Auth is opt-in per route** via `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()`. There is NO global guard, so any undecorated route is fully public. Guard every mutating route and every sensitive read. (Several routes are currently unguarded — treat that as a bug, not a pattern.)
+- **A valid JWT proves identity, not authorization.** For project/task/comment/team operations, also enforce access: `ProjectService.ensureProjectRole(projectId, userId, minRole)` for project-scoped actions, or resource ownership (e.g. comment `author_id === userId`). Passing `userId` in only to emit activity/notification events is not an access check.
+- **Roles:** project-scoped `ProjectRole` (OWNER > ADMIN > MEMBER) via `ensureProjectRole` is the only authorization gate. `User.role`/`UserRole` is descriptive metadata — don't gate on it without a real `RolesGuard`.
+- Read the caller with `@CurrentUser('id')`; the JWT strategy reloads the live `User` per request and rejects inactive users.
+- **Secrets:** never return `password_hash` (keep `select: false` + `@ApiHideProperty`; load only via `UserService.findOneByEmailWithPassword`). Hash with bcryptjs. Refresh tokens are opaque random values stored as sha256 hashes, rotated with reuse-detection on every refresh — never issue a JWT as the refresh token.
+
+## Data Layer (TypeORM)
+
+- **Access:** constructor `@InjectRepository(Entity)` + `Repository<T>`. Use `QueryBuilder` only for joins/filters the repository API can't express; use `DataSource.query` only for the position stored procedures (`fn_move_task`, `fn_reorder_task`, `fn_reorder_subtask`).
+- **Relations:** load explicitly per query (`relations: [...]` or `leftJoin` + `addSelect`); no lazy relations, no relation access inside loops. Mutations follow save-then-refetch (`save`, then `findOneById()` re-queries the relation graph for the response).
+- **Transactions:** wrap any multi-row write that must stay consistent (membership changes) in `dataSource.transaction(...)` — follow `ProjectService.create`.
+- **Bound collection queries:** paginate (`skip`/`take` + `findAndCount`) and select needed columns; don't return unbounded full relation graphs.
+- **Schema via migrations, not `synchronize`.** Currently `synchronize` is effectively ON (`app.module.ts` keys it off unset `NODE_ENV`) and `typeorm.ts` hardcodes `synchronize: true` with no `migrations` glob, so `src/migrations/*` never runs. Set `synchronize: false`, set `NODE_ENV` per environment, register `migrations: [__dirname + '/../migrations/*{.ts,.js}']`, and evolve schema via `typeorm migration:generate`.
+
+## Shared Utilities, Logging & Tests
+
+- **Logging:** one `private readonly logger = new Logger(ClassName.name)` per service/gateway/listener. No `console.*` outside `src/database/seed.ts`.
+- **HTML sanitization:** sanitize user-supplied HTML at the DTO boundary with the shared `sanitize()` util (`src/common/utils`) via `@Transform`. Apply to any new field rendered as HTML (only comment content does today).
+- **Module shape:** `src/modules/<feature>/` = controller + service + module + entity + DTOs. Aggregation/gateway modules omit pieces intentionally (`board` = read-only aggregation, no entity; `events` = WS gateway) — follow the neighboring module.
+- **Tests:** coverage is minimal (only `app.controller` and `events.gateway` have specs; e2e is starter boilerplate). Add `*.service.spec.ts` with `Test.createTestingModule` + repository mocks for new work — follow `events.gateway.spec.ts`.
+
+## Known Decisions (not yet settled)
+
+These are contract/scaffolding choices, not existing conventions — confirm before relying on them: unifying the response envelope; API versioning (`enableVersioning`); standardizing DELETE on 204; env-schema validation on `ConfigModule` (fail-fast at boot); security hardening (helmet, CORS allowlist replacing `origin:'*'`, body-size limit).
