@@ -82,6 +82,13 @@ This project uses **pnpm**. Do not use `npm` or `yarn`.
 - **Module shape:** `src/modules/<feature>/` = controller + service + module + entity + DTOs. Aggregation/gateway modules omit pieces intentionally (`board` = read-only aggregation, no entity; `events` = WS gateway) — follow the neighboring module.
 - **Tests:** coverage is minimal (only `app.controller` and `events.gateway` have specs; e2e is starter boilerplate). Add `*.service.spec.ts` with `Test.createTestingModule` + repository mocks for new work — follow `events.gateway.spec.ts`.
 
+## Skills (`.claude/skills/`)
+
+Auto-load by description; invoke explicitly when one clearly fits. Both are generic references — where their advice conflicts with the conventions in this file (e.g. URL versioning, response envelopes, pagination params), **this file wins**.
+
+- **`api-design`** — REST API design patterns: resource naming, status codes, pagination/filtering, error responses, versioning, rate limiting. Use when designing new endpoints or reviewing an API contract.
+- **`backend-patterns`** — backend architecture & server-side practices: controller/service/repository layering, DB query optimization (N+1, indexing, pooling), caching, background jobs, middleware. Use for service-layer or data-access design.
+
 ## Known Decisions (not yet settled)
 
 These are contract/scaffolding choices, not existing conventions — confirm before relying on them: unifying the response envelope; API versioning (`enableVersioning`); standardizing DELETE on 204; env-schema validation on `ConfigModule` (fail-fast at boot); security hardening (helmet, CORS allowlist replacing `origin:'*'`, body-size limit).
