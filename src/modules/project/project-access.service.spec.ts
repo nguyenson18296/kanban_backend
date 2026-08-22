@@ -170,6 +170,34 @@ describe('ProjectAccessService', () => {
     });
   });
 
+  describe('getProjectIdForColumn', () => {
+    it('returns the project id resolved through the column', async () => {
+      rawQueryBuilder.getRawOne.mockResolvedValue({ project_id: 'proj1234' });
+      await expect(service.getProjectIdForColumn(7)).resolves.toBe('proj1234');
+      expect(rawQueryBuilder.select).toHaveBeenCalledWith(
+        'col.project_id',
+        'project_id',
+      );
+      expect(rawQueryBuilder.from).toHaveBeenCalledWith(
+        'kanban_columns',
+        'col',
+      );
+      expect(rawQueryBuilder.where).toHaveBeenCalledWith('col.id = :columnId', {
+        columnId: 7,
+      });
+    });
+
+    it('throws NotFoundException when the column does not exist', async () => {
+      rawQueryBuilder.getRawOne.mockResolvedValue(undefined);
+      await expect(service.getProjectIdForColumn(7)).rejects.toMatchObject({
+        response: {
+          statusCode: 404,
+          message: 'Column with id "7" not found',
+        },
+      });
+    });
+  });
+
   describe('ensureTaskRole', () => {
     it('resolves the project then enforces the role, returning the project id', async () => {
       rawQueryBuilder.getRawOne.mockResolvedValue({ project_id: 'proj1234' });
