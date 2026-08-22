@@ -13,15 +13,13 @@ import { Repository } from 'typeorm';
 import { Team } from './team.entity';
 import { TeamMember } from './team-member.entity';
 import { Project } from '../project/project.entity';
-import { ProjectMember, ProjectRole } from '../project/project-member.entity';
+import {
+  ProjectMember,
+  ProjectRole,
+  PROJECT_ROLE_HIERARCHY,
+} from '../project/project-member.entity';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { ApiListResponse } from '../../common/interfaces/api-response.interface';
-
-const ROLE_HIERARCHY: Record<ProjectRole, number> = {
-  [ProjectRole.OWNER]: 3,
-  [ProjectRole.ADMIN]: 2,
-  [ProjectRole.MEMBER]: 1,
-};
 
 @Injectable()
 export class TeamService {
@@ -243,7 +241,10 @@ export class TeamService {
         message: 'You are not a member of this project',
       });
     }
-    if (ROLE_HIERARCHY[membership.role] < ROLE_HIERARCHY[minimumRole]) {
+    if (
+      PROJECT_ROLE_HIERARCHY[membership.role] <
+      PROJECT_ROLE_HIERARCHY[minimumRole]
+    ) {
       throw new ForbiddenException({
         statusCode: HttpStatus.FORBIDDEN,
         message: `This action requires at least ${minimumRole} role`,
