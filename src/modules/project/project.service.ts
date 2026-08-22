@@ -10,17 +10,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Like, Repository } from 'typeorm';
 import { Project } from './project.entity';
-import { ProjectMember, ProjectRole } from './project-member.entity';
+import {
+  ProjectMember,
+  ProjectRole,
+  PROJECT_ROLE_HIERARCHY,
+} from './project-member.entity';
 import { User } from '../user/user.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ApiListResponse } from '../../common/interfaces/api-response.interface';
-
-const ROLE_HIERARCHY: Record<ProjectRole, number> = {
-  [ProjectRole.OWNER]: 3,
-  [ProjectRole.ADMIN]: 2,
-  [ProjectRole.MEMBER]: 1,
-};
 
 @Injectable()
 export class ProjectService {
@@ -384,7 +382,10 @@ export class ProjectService {
         message: 'You are not a member of this project',
       });
     }
-    if (ROLE_HIERARCHY[membership.role] < ROLE_HIERARCHY[minimumRole]) {
+    if (
+      PROJECT_ROLE_HIERARCHY[membership.role] <
+      PROJECT_ROLE_HIERARCHY[minimumRole]
+    ) {
       throw new ForbiddenException({
         statusCode: HttpStatus.FORBIDDEN,
         message: `This action requires at least ${minimumRole} role`,

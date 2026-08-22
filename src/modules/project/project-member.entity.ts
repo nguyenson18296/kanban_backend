@@ -15,7 +15,15 @@ export enum ProjectRole {
   OWNER = 'owner',
   ADMIN = 'admin',
   MEMBER = 'member',
+  VIEWER = 'viewer',
 }
+
+export const PROJECT_ROLE_HIERARCHY: Record<ProjectRole, number> = {
+  [ProjectRole.OWNER]: 3,
+  [ProjectRole.ADMIN]: 2,
+  [ProjectRole.MEMBER]: 1,
+  [ProjectRole.VIEWER]: 0,
+};
 
 @Entity('project_members')
 export class ProjectMember {
