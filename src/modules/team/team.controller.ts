@@ -37,7 +37,11 @@ export class TeamController {
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiResponse({ status: 201, description: 'Team created' })
   @ApiResponse({ status: 403, description: 'Insufficient project role' })
-  @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Project not found (also returned when the caller is not a project member)',
+  })
   @ApiResponse({
     status: 409,
     description: 'Team name already exists in project',
@@ -95,7 +99,11 @@ export class TeamController {
   @ApiResponse({ status: 201, description: 'Member added' })
   @ApiResponse({ status: 400, description: 'User is not a project member' })
   @ApiResponse({ status: 403, description: 'Insufficient project role' })
-  @ApiResponse({ status: 404, description: 'Team not found' })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Project or team not found (non-member callers get the project 404)',
+  })
   @ApiResponse({
     status: 409,
     description: 'User already in a team in this project',
@@ -119,7 +127,11 @@ export class TeamController {
   @ApiParam({ name: 'userId', description: 'User UUID' })
   @ApiResponse({ status: 204, description: 'Member removed' })
   @ApiResponse({ status: 403, description: 'Insufficient project role' })
-  @ApiResponse({ status: 404, description: 'Team not found' })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Project or team not found (non-member callers get the project 404)',
+  })
   removeMember(
     @Param('projectId', ParseProjectIdPipe) projectId: string,
     @Param('teamId', ParseIntPipe) teamId: number,

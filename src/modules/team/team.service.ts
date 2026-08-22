@@ -13,11 +13,8 @@ import { Repository } from 'typeorm';
 import { Team } from './team.entity';
 import { TeamMember } from './team-member.entity';
 import { Project } from '../project/project.entity';
-import {
-  ProjectMember,
-  ProjectRole,
-  PROJECT_ROLE_HIERARCHY,
-} from '../project/project-member.entity';
+import { ProjectMember, ProjectRole } from '../project/project-member.entity';
+import { ProjectAccessService } from '../project/project-access.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { ApiListResponse } from '../../common/interfaces/api-response.interface';
 
@@ -34,18 +31,21 @@ export class TeamService {
     private readonly projectRepository: Repository<Project>,
     @InjectRepository(ProjectMember)
     private readonly projectMemberRepository: Repository<ProjectMember>,
+    private readonly projectAccessService: ProjectAccessService,
   ) {}
 
   async create(
     projectId: string,
     dto: CreateTeamDto,
-    actorId?: string,
+    actorId: string,
   ): Promise<Team> {
     try {
       await this.ensureProjectExists(projectId);
-      if (actorId) {
-        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
-      }
+      await this.projectAccessService.ensureRole(
+        projectId,
+        actorId,
+        ProjectRole.ADMIN,
+      );
 
       const team = this.teamRepository.create({
         ...dto,
@@ -143,13 +143,17 @@ export class TeamService {
     projectId: string,
     teamId: number,
     userId: string,
-    actorId?: string,
+    actorId: string,
   ): Promise<void> {
     try {
+      // Gate first: a non-member must get the masked project 404 before any
+      // team lookup can reveal whether the team exists (anti-enumeration).
+      await this.projectAccessService.ensureRole(
+        projectId,
+        actorId,
+        ProjectRole.ADMIN,
+      );
       await this.findOneById(projectId, teamId);
-      if (actorId) {
-        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
-      }
 
       const isProjectMember = await this.projectMemberRepository.existsBy({
         project_id: projectId,
@@ -200,13 +204,16 @@ export class TeamService {
     projectId: string,
     teamId: number,
     userId: string,
-    actorId?: string,
+    actorId: string,
   ): Promise<void> {
     try {
+      // Gate first: see addMember — the masked 404 must win for non-members.
+      await this.projectAccessService.ensureRole(
+        projectId,
+        actorId,
+        ProjectRole.ADMIN,
+      );
       await this.findOneById(projectId, teamId);
-      if (actorId) {
-        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
-      }
       await this.teamMemberRepository.delete({
         team_id: teamId,
         user_id: userId,
@@ -222,32 +229,6 @@ export class TeamService {
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to remove team member',
         error: (error as Error).message,
-      });
-    }
-  }
-
-  private async ensureProjectRole(
-    projectId: string,
-    userId: string,
-    minimumRole: ProjectRole,
-  ): Promise<void> {
-    const membership = await this.projectMemberRepository.findOneBy({
-      project_id: projectId,
-      user_id: userId,
-    });
-    if (!membership) {
-      throw new ForbiddenException({
-        statusCode: HttpStatus.FORBIDDEN,
-        message: 'You are not a member of this project',
-      });
-    }
-    if (
-      PROJECT_ROLE_HIERARCHY[membership.role] <
-      PROJECT_ROLE_HIERARCHY[minimumRole]
-    ) {
-      throw new ForbiddenException({
-        statusCode: HttpStatus.FORBIDDEN,
-        message: `This action requires at least ${minimumRole} role`,
       });
     }
   }

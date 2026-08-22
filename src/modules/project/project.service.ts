@@ -10,15 +10,12 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Like, Repository } from 'typeorm';
 import { Project } from './project.entity';
-import {
-  ProjectMember,
-  ProjectRole,
-  PROJECT_ROLE_HIERARCHY,
-} from './project-member.entity';
+import { ProjectMember, ProjectRole } from './project-member.entity';
 import { User } from '../user/user.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ApiListResponse } from '../../common/interfaces/api-response.interface';
+import { ProjectAccessService } from './project-access.service';
 
 @Injectable()
 export class ProjectService {
@@ -32,6 +29,7 @@ export class ProjectService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
+    private readonly projectAccessService: ProjectAccessService,
   ) {}
 
   private static readonly MAX_ID_RETRIES = 3;
@@ -279,13 +277,15 @@ export class ProjectService {
   async addMembers(
     projectId: string,
     userIds: string[],
-    actorId?: string,
+    actorId: string,
   ): Promise<void> {
     try {
       await this.ensureProjectExists(projectId);
-      if (actorId) {
-        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
-      }
+      await this.projectAccessService.ensureRole(
+        projectId,
+        actorId,
+        ProjectRole.ADMIN,
+      );
       await this.validateUsers(userIds);
 
       const existing = await this.memberRepository.findBy({
@@ -325,13 +325,15 @@ export class ProjectService {
   async removeMembers(
     projectId: string,
     userIds: string[],
-    actorId?: string,
+    actorId: string,
   ): Promise<void> {
     try {
       await this.ensureProjectExists(projectId);
-      if (actorId) {
-        await this.ensureProjectRole(projectId, actorId, ProjectRole.ADMIN);
-      }
+      await this.projectAccessService.ensureRole(
+        projectId,
+        actorId,
+        ProjectRole.ADMIN,
+      );
 
       // Remove from team_members first (user leaving project should leave their team too)
       await this.memberRepository
@@ -363,32 +365,6 @@ export class ProjectService {
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to remove project members',
         error: (error as Error).message,
-      });
-    }
-  }
-
-  async ensureProjectRole(
-    projectId: string,
-    userId: string,
-    minimumRole: ProjectRole,
-  ): Promise<void> {
-    const membership = await this.memberRepository.findOneBy({
-      project_id: projectId,
-      user_id: userId,
-    });
-    if (!membership) {
-      throw new ForbiddenException({
-        statusCode: HttpStatus.FORBIDDEN,
-        message: 'You are not a member of this project',
-      });
-    }
-    if (
-      PROJECT_ROLE_HIERARCHY[membership.role] <
-      PROJECT_ROLE_HIERARCHY[minimumRole]
-    ) {
-      throw new ForbiddenException({
-        statusCode: HttpStatus.FORBIDDEN,
-        message: `This action requires at least ${minimumRole} role`,
       });
     }
   }
