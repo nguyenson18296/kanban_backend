@@ -4,12 +4,14 @@ import { Team } from './team.entity';
 import { TeamMember } from './team-member.entity';
 import { Project } from '../project/project.entity';
 import { ProjectMember } from '../project/project-member.entity';
+import { ProjectModule } from '../project/project.module';
 import { TeamService } from './team.service';
 import { TeamController } from './team.controller';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Team, TeamMember, Project, ProjectMember]),
+    ProjectModule,
   ],
   controllers: [TeamController],
   providers: [TeamService],

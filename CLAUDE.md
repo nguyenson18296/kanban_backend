@@ -62,8 +62,8 @@ This project uses **pnpm**. Do not use `npm` or `yarn`.
 ## Authentication & Authorization
 
 - **Auth is opt-in per route** via `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()`. There is NO global guard, so any undecorated route is fully public. Guard every mutating route and every sensitive read. (Several routes are currently unguarded — treat that as a bug, not a pattern.)
-- **A valid JWT proves identity, not authorization.** For project/task/comment/team operations, also enforce access: `ProjectService.ensureProjectRole(projectId, userId, minRole)` for project-scoped actions, or resource ownership (e.g. comment `author_id === userId`). Passing `userId` in only to emit activity/notification events is not an access check.
-- **Roles:** project-scoped `ProjectRole` (OWNER > ADMIN > MEMBER) via `ensureProjectRole` is the only authorization gate. `User.role`/`UserRole` is descriptive metadata — don't gate on it without a real `RolesGuard`.
+- **A valid JWT proves identity, not authorization.** For project/task/comment/team operations, also enforce access via `ProjectAccessService` (`src/modules/project/project-access.service.ts`): `ensureRole(projectId, userId, minRole)` for project-scoped actions, `ensureTaskRole`/`ensureColumnRole` for task/column-scoped ones, or resource ownership (e.g. comment `author_id === userId`). Actor ids on gated service methods are **required**, never optional (optional actor = skipped check). Passing `userId` in only to emit activity/notification events is not an access check.
+- **Roles:** project-scoped `ProjectRole` (OWNER > ADMIN > MEMBER > VIEWER) via `ProjectAccessService` is the only authorization gate. Run the gate **before** any resource lookup: non-members get a masked 404 indistinguishable from a missing resource (anti-enumeration); members below the required role get 403. `User.role`/`UserRole` is descriptive metadata — don't gate on it without a real `RolesGuard`.
 - Read the caller with `@CurrentUser('id')`; the JWT strategy reloads the live `User` per request and rejects inactive users.
 - **Secrets:** never return `password_hash` (keep `select: false` + `@ApiHideProperty`; load only via `UserService.findOneByEmailWithPassword`). Hash with bcryptjs. Refresh tokens are opaque random values stored as sha256 hashes, rotated with reuse-detection on every refresh — never issue a JWT as the refresh token.
 
@@ -84,10 +84,11 @@ This project uses **pnpm**. Do not use `npm` or `yarn`.
 
 ## Skills (`.claude/skills/`)
 
-Auto-load by description; invoke explicitly when one clearly fits. Both are generic references — where their advice conflicts with the conventions in this file (e.g. URL versioning, response envelopes, pagination params), **this file wins**.
+Auto-load by description; invoke explicitly when one clearly fits. The first two are generic references — where their advice conflicts with the conventions in this file (e.g. URL versioning, response envelopes, pagination params), **this file wins**.
 
 - **`api-design`** — REST API design patterns: resource naming, status codes, pagination/filtering, error responses, versioning, rate limiting. Use when designing new endpoints or reviewing an API contract.
 - **`backend-patterns`** — backend architecture & server-side practices: controller/service/repository layering, DB query optimization (N+1, indexing, pooling), caching, background jobs, middleware. Use for service-layer or data-access design.
+- **`api-review`** — repo-specific checklist for reviewing API implementations before merge: guards + `ProjectAccessService` authorization and the 404-masking contract, wire format, validation pipeline, pagination/N+1/transactions, Swagger, error hygiene. Synthesizes the two references above and resolves their conflicts in this repo's favor.
 
 ## Known Decisions (not yet settled)
 

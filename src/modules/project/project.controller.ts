@@ -114,7 +114,11 @@ export class ProjectController {
   @ApiParam({ name: 'id', description: 'Project ID' })
   @ApiResponse({ status: 201, description: 'Members added' })
   @ApiResponse({ status: 403, description: 'Insufficient project role' })
-  @ApiResponse({ status: 404, description: 'Project or user not found' })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Project or user not found (also returned when the caller is not a project member)',
+  })
   addMembers(
     @Param('id', ParseProjectIdPipe) id: string,
     @Body() dto: ManageProjectMembersDto,
@@ -131,7 +135,11 @@ export class ProjectController {
   @ApiParam({ name: 'id', description: 'Project ID' })
   @ApiResponse({ status: 204, description: 'Members removed' })
   @ApiResponse({ status: 403, description: 'Insufficient project role' })
-  @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Project not found (also returned when the caller is not a project member)',
+  })
   removeMembers(
     @Param('id', ParseProjectIdPipe) id: string,
     @Body() dto: ManageProjectMembersDto,
